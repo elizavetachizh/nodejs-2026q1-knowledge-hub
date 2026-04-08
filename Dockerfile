@@ -1,32 +1,25 @@
-# Stage 1: Development
-FROM node:24-alpine AS development
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY . .
-
-# Stage 2: Build
+# Stage 1: Build
 FROM node:24-alpine AS build
 WORKDIR /app
-COPY --from=development /app/node_modules ./node_modules
+COPY package*.json ./
+RUN npm ci
 COPY . .
 RUN npm run build
 
-# Prune development dependencies to keep the image small
-RUN npm prune --production
 
-
-# Stage 3: Production
+# Stage 2: Production
 FROM node:24-alpine AS production
 ENV NODE_ENV=production
 WORKDIR /app
+
+# Installing curl for alpine to check if the server is running
+RUN apk add --no-cache curl 
+
+COPY --from=build /app/package*.json ./
+RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./
 
 # Switch to non-root user
-USER appuser
-
+USER node
 EXPOSE 4000
-
 CMD ["node", "dist/main"]

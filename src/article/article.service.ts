@@ -36,12 +36,12 @@ export class ArticleService {
     });
   }
 
-  // используем для  CommentService, без обработки 404
+  // Used by CommentService, without 404 handling
   findArticleById(id: string): Article | undefined {
     return this.articles.find((article) => article.id === id);
   }
 
-  // основной GET by id
+  // Main GET by id
   getArticle(id: string): Article {
     const article = this.findArticleById(id);
     if (!article) {

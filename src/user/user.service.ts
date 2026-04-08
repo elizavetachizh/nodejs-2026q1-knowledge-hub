@@ -37,7 +37,7 @@ export class UserService {
   getUser(id: string): PublicUser {
     const user = this.users.find((u) => u.id === id);
     if (!user) {
-      throw new NotFoundException(`Пользователь с ID ${id} не найден`);
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
     return this.toPublicUser(user);
   }
@@ -59,7 +59,7 @@ export class UserService {
   update(id: string, updatePasswordDto: UpdatePasswordDto) {
     const user = this.users.find((u) => u.id === id);
     if (!user) {
-      throw new NotFoundException(`Пользователь с ID ${id} не найден`);
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
     if (user.password !== updatePasswordDto.oldPassword) {
       throw new ForbiddenException('Invalid password');
