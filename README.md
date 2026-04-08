@@ -82,3 +82,34 @@ npm run format
 Press <kbd>F5</kbd> to debug.
 
 For more information, visit: https://code.visualstudio.com/docs/editor/debugging
+
+## Docker
+
+Build and run the application with Docker Compose:
+
+```
+docker compose up --build
+```
+
+Application: `http://localhost:4000`  
+Swagger: `http://localhost:4000/doc`
+
+## Docker Hub Image
+
+Replace the placeholder with your published image link:
+
+`https://hub.docker.com/repository/docker/elizavetachizh/nodejs-2026q1-knowledge-hub-app`
+
+## Security Scan
+
+Image scanned with Docker Scout:
+
+```
+docker scout cves nodejs-2026q1-knowledge-hub-app:latest
+```
+
+Last scan result:
+- Critical: `0`
+- High: `32`
+- Medium: `21`
+- Low: `5`
