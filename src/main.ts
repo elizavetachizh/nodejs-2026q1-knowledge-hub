@@ -28,6 +28,10 @@ async function bootstrap() {
     )
     .setVersion('1.0')
     .addTag('knowledge-hub')
+    .addTag('Article', 'Operations with articles: create, read, update, delete')
+    .addTag('User', 'Operations with users and roles')
+    .addTag('Comment', 'Operations with comments for articles')
+    .addTag('Category', 'Operations with article categories')
     .build();
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('doc', app, documentFactory);
