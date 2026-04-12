@@ -5,11 +5,11 @@ import { UserModule } from './user/user.module';
 import { ArticleModule } from './article/article.module';
 import { CategoryModule } from './category/category.module';
 import { CommentModule } from './comment/comment.module';
-import { PrismaService } from 'prisma/prisma.service';
+import { PrismaModule } from 'prisma/src/prisma/prisma.module';
 
 @Module({
-  imports: [UserModule, ArticleModule, CategoryModule, CommentModule],
+  imports: [PrismaModule, UserModule, ArticleModule, CategoryModule, CommentModule],
   controllers: [AppController],
-  providers: [AppService, PrismaService],
+  providers: [AppService],
 })
 export class AppModule {}

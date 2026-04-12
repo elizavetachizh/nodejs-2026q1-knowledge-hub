@@ -4,14 +4,14 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 enum ArticleStatus {
-  draft
-  published
-  archived
+  DRAFT
+  PUBLISHED
+  ARCHIVED
 }
 enum UserRole {
-  admin
-  editor
-  viewer
+  ADMIN
+  EDITOR
+  VIEWER
 }
 
 generator client {
@@ -26,7 +26,7 @@ datasource db {
 
 model User {
   id         String   @id @default(uuid())
-  login      String   @unique
+  login      String   
   password   String
   role       UserRole @default(VIEWER)
   createdAt  DateTime @default(now())
@@ -47,9 +47,10 @@ model Article {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
   author     User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)ё
+  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  @@index([authorId]), @@index([categoryId])
+  @@index([authorId])
+  @@index([categoryId])
 }
 
 model Category {
@@ -67,8 +68,6 @@ model Comment {
   createdAt  DateTime @default(now())
   author     User?    @relation(fields: [authorId], references: [id], onDelete: Cascade)
   article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-
-  @@index([articleId]), @@index([authorId])
 }
 
 model Tag {
