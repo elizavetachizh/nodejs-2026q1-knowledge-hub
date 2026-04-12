@@ -1,95 +1,142 @@
-import {
-  forwardRef,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Article } from './article.types';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
-import { randomUUID } from 'node:crypto';
 import { UpdateArticleDto } from './dto/update-article.dto';
-import { CommentService } from '../comment/comment.service';
 import { PrismaService } from 'prisma/prisma.service';
+import { toArticleDto, toPrismaStatus } from './utils/article.mapper';
 
 @Injectable()
 export class ArticleService {
-  private prisma: PrismaService;
-  constructor(
-    @Inject(forwardRef(() => CommentService))
-    private readonly commentService: CommentService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
   async getArticles(
     status?: ArticleStatus,
     categoryId?: string,
     tag?: string,
   ): Promise<Article[]> {
-    return await this.prisma.article.findMany({
+    const raws = await this.prisma.article.findMany({
       where: {
-        status,
-        categoryId,
-        tags: {
-          some: {
-            name: tag,
-          },
-        },
+        ...(status ? { status: toPrismaStatus(status) } : {}),
+        ...(categoryId ? { categoryId } : {}),
+        ...(tag ? { tags: { some: { name: tag } } } : {}),
+      },
+      include: {
+        tags: true,
       },
     });
+    return raws.map((row) => toArticleDto(row));
   }
 
   // Used by CommentService, without 404 handling
-  async findArticleById(id: string): Promise<Article> {
-    return  await this.prisma.article.findUnique({
-      where: { id },
+  async findArticleById(id: string): Promise<Article | null> {
+    const row = await this.prisma.article.findUnique({
+      where: { id: id },
+      include: { tags: true },
     });
+    if (!row) return null;
+    return toArticleDto(row);
   }
 
   // Main GET by id
   async getArticle(id: string): Promise<Article> {
-    return await this.prisma.article.findUnique({
+    const row = await this.prisma.article.findUnique({
       where: { id },
+      include: {
+        tags: true,
+      },
     });
+    if (!row) throw new NotFoundException(`Article with id ${id} not found`);
+
+    return toArticleDto(row);
   }
 
   async createArticle(createArticleDto: CreateArticleDto): Promise<Article> {
-    const now = new Date().getTime();
-    return await this.prisma.article.create({
-      data: createArticleDto,
+    const row = await this.prisma.article.create({
+      data: {
+        title: createArticleDto.title,
+        content: createArticleDto.content,
+        authorId: createArticleDto.authorId,
+        categoryId: createArticleDto.categoryId,
+        status: toPrismaStatus(createArticleDto.status),
+        tags: {
+          connectOrCreate: createArticleDto.tags?.map((tag) => ({
+            where: { name: tag },
+            create: { name: tag },
+          })),
+        },
+      },
+      include: {
+        tags: true,
+      },
     });
+    return toArticleDto(row);
   }
 
-  async updateArticle(id: string, updateArticleDto: UpdateArticleDto): Promise<Article> {
-    const article = this.articles.find((article) => article.id === id);
-    return await this.prisma.article.update({
+  async updateArticle(
+    id: string,
+    updateArticleDto: UpdateArticleDto,
+  ): Promise<Article> {
+    const article = await this.prisma.article.findUnique({
       where: { id },
-      data: updateArticleDto,
+    });
+    if (!article)
+      throw new NotFoundException(`Article with id ${id} not found`);
+
+    const row = await this.prisma.article.update({
+      where: { id },
+      data: {
+        title: updateArticleDto.title,
+        content: updateArticleDto.content,
+        ...(updateArticleDto.status
+          ? { status: toPrismaStatus(updateArticleDto.status) }
+          : {}),
+        ...(updateArticleDto.authorId !== undefined
+          ? { authorId: updateArticleDto.authorId }
+          : {}),
+        ...(updateArticleDto.categoryId !== undefined
+          ? { categoryId: updateArticleDto.categoryId }
+          : {}),
+        ...(updateArticleDto.tags
+          ? {
+              tags: {
+                set: [],
+                connectOrCreate: updateArticleDto.tags?.map((tag) => ({
+                  where: { name: tag },
+                  create: { name: tag },
+                })),
+              },
+            }
+          : {}),
+      },
+      include: {
+        tags: true,
+      },
+    });
+    return toArticleDto(row);
+  }
+  async clearCategoryId(categoryId: string) {
+    return this.prisma.article.updateMany({
+      where: { categoryId },
+      data: { categoryId: null },
     });
   }
-  clearCategoryId(categoryId: string) {
-    const articles = this.articles;
-    for (const article of articles) {
-      if (article.categoryId === categoryId) {
-        article.categoryId = null;
-        article.updatedAt = new Date().getTime();
-      }
-    }
-  }
 
-  clearAuthorId(authorId: string) {
-    const articles = this.articles;
-    for (const article of articles) {
-      if (article.authorId === authorId) {
-        article.authorId = null;
-        article.updatedAt = new Date().getTime();
-      }
-    }
+  async clearAuthorId(authorId: string) {
+    return this.prisma.article.updateMany({
+      where: { authorId },
+      data: { authorId: null },
+    });
   }
 
   async deleteArticle(id: string): Promise<void> {
-    const article = this.articles.find((article) => article.id === id);
+    const article = await this.prisma.article.findUnique({
+      where: { id },
+    });
     if (!article) {
       throw new NotFoundException(`Article with id ${id} not found`);
     }
-    this.commentService.deleteCommentByArticleId(id);
-    this.articles = this.articles.filter((article) => article.id !== id);
+
+    await this.prisma.article.delete({
+      where: { id },
+    });
   }
 }
