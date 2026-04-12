@@ -8,7 +8,7 @@ import { PrismaService } from 'prisma/prisma.service';
 export class CategoryService {
   constructor(private readonly prisma: PrismaService) {}
   async getCategories(): Promise<Category[]> {
-    return await this.prisma.category.findMany();
+    return this.prisma.category.findMany();
   }
   async getCategory(id: string): Promise<Category> {
     const category = await this.prisma.category.findUnique({
@@ -19,7 +19,9 @@ export class CategoryService {
     }
     return category;
   }
-  async createCategory(createCategoryDto: CreateCategoryDto): Promise<Category> {
+  async createCategory(
+    createCategoryDto: CreateCategoryDto,
+  ): Promise<Category> {
     return await this.prisma.category.create({
       data: {
         name: createCategoryDto.name,
@@ -27,7 +29,10 @@ export class CategoryService {
       },
     });
   }
-  async updateCategory(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+  async updateCategory(
+    id: string,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<Category> {
     const category = await this.prisma.category.findUnique({
       where: { id },
     });
@@ -49,13 +54,14 @@ export class CategoryService {
     if (!category) {
       throw new NotFoundException(`Category with id ${id} not found`);
     }
-    await this.prisma.article.updateMany({
-      where: { categoryId: id },
-      data: { categoryId: null },
-    });
-    await this.prisma.category.delete({
-      where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.article.updateMany({
+        where: { categoryId: id },
+        data: { categoryId: null },
+      });
+      await tx.category.delete({
+        where: { id },
+      });
     });
   }
-  }
-
+}

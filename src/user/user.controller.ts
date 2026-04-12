@@ -48,7 +48,7 @@ export class UserController {
     type: String,
     description: 'Sort order',
   })
- async getUsers(
+  async getUsers(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('sortBy') sortBy?: string,

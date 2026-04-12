@@ -8,7 +8,13 @@ import { CommentModule } from './comment/comment.module';
 import { PrismaModule } from 'prisma/src/prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, UserModule, ArticleModule, CategoryModule, CommentModule],
+  imports: [
+    PrismaModule,
+    UserModule,
+    ArticleModule,
+    CategoryModule,
+    CommentModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

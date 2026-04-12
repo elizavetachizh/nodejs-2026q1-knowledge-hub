@@ -5,15 +5,13 @@ import {
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
-import {  PublicUser } from './user.types';
+import { PublicUser } from './user.types';
 import { PrismaService } from 'prisma/prisma.service';
 import { toPrismaRole, toPublicUser } from './utils/user.mapper';
 
 @Injectable()
 export class UserService {
-  constructor(
-    private readonly prisma: PrismaService
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getUsers(): Promise<PublicUser[]> {
     const users = await this.prisma.user.findMany();
@@ -41,7 +39,10 @@ export class UserService {
     return toPublicUser(user);
   }
 
-  async updateUser(id: string, updatePasswordDto: UpdatePasswordDto): Promise<PublicUser> {
+  async updateUser(
+    id: string,
+    updatePasswordDto: UpdatePasswordDto,
+  ): Promise<PublicUser> {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -67,12 +68,14 @@ export class UserService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    await this.prisma.article.updateMany({
-      where: { authorId: id },
-      data: { authorId: null },
-    });
-    await this.prisma.user.delete({
-      where: { id },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.article.updateMany({
+        where: { authorId: id },
+        data: { authorId: null },
+      });
+      await tx.user.delete({
+        where: { id },
+      });
     });
   }
 }

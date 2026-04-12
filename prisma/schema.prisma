@@ -49,7 +49,7 @@ model Article {
   author     User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
   category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  @@index([authorId])
+  @@index([status])
   @@index([categoryId])
 }
 
