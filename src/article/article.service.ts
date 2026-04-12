@@ -9,77 +9,60 @@ import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { randomUUID } from 'node:crypto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { CommentService } from '../comment/comment.service';
+import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class ArticleService {
-  private articles: Article[] = [];
+  private prisma: PrismaService;
   constructor(
     @Inject(forwardRef(() => CommentService))
     private readonly commentService: CommentService,
   ) {}
-  getArticles(
+  async getArticles(
     status?: ArticleStatus,
     categoryId?: string,
     tag?: string,
-  ): Article[] {
-    return this.articles.filter((article) => {
-      if (status && article.status !== status) {
-        return false;
-      }
-      if (categoryId && article.categoryId !== categoryId) {
-        return false;
-      }
-      if (tag && !article.tags.includes(tag)) {
-        return false;
-      }
-      return true;
+  ): Promise<Article[]> {
+    return await this.prisma.article.findMany({
+      where: {
+        status,
+        categoryId,
+        tags: {
+          some: {
+            name: tag,
+          },
+        },
+      },
     });
   }
 
   // Used by CommentService, without 404 handling
-  findArticleById(id: string): Article | undefined {
-    return this.articles.find((article) => article.id === id);
+  async findArticleById(id: string): Promise<Article> {
+    return  await this.prisma.article.findUnique({
+      where: { id },
+    });
   }
 
   // Main GET by id
-  getArticle(id: string): Article {
-    const article = this.findArticleById(id);
-    if (!article) {
-      throw new NotFoundException(`Article with id ${id} not found`);
-    }
-    return article;
+  async getArticle(id: string): Promise<Article> {
+    return await this.prisma.article.findUnique({
+      where: { id },
+    });
   }
 
-  createArticle(createArticleDto: CreateArticleDto) {
+  async createArticle(createArticleDto: CreateArticleDto): Promise<Article> {
     const now = new Date().getTime();
-    const article: Article = {
-      id: randomUUID(),
-      title: createArticleDto.title,
-      content: createArticleDto.content,
-      status: createArticleDto.status ?? ArticleStatus.DRAFT,
-      authorId: createArticleDto.authorId,
-      categoryId: createArticleDto.categoryId,
-      tags: createArticleDto.tags ?? [],
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.articles.push(article);
-    return article;
+    return await this.prisma.article.create({
+      data: createArticleDto,
+    });
   }
 
-  updateArticle(id: string, updateArticleDto: UpdateArticleDto) {
+  async updateArticle(id: string, updateArticleDto: UpdateArticleDto): Promise<Article> {
     const article = this.articles.find((article) => article.id === id);
-    if (!article) {
-      throw new NotFoundException(`Article with id ${id} not found`);
-    }
-    article.title = updateArticleDto.title;
-    article.content = updateArticleDto.content;
-    article.status = updateArticleDto.status;
-    article.authorId = updateArticleDto.authorId;
-    article.categoryId = updateArticleDto.categoryId;
-    article.tags = updateArticleDto.tags;
-    article.updatedAt = new Date().getTime();
-    return article;
+    return await this.prisma.article.update({
+      where: { id },
+      data: updateArticleDto,
+    });
   }
   clearCategoryId(categoryId: string) {
     const articles = this.articles;
@@ -101,7 +84,7 @@ export class ArticleService {
     }
   }
 
-  deleteArticle(id: string): void {
+  async deleteArticle(id: string): Promise<void> {
     const article = this.articles.find((article) => article.id === id);
     if (!article) {
       throw new NotFoundException(`Article with id ${id} not found`);
