@@ -10,3 +10,8 @@ export type InternalUser = {
 };
 
 export type PublicUser = Omit<InternalUser, 'password'>;
+export type JwtPayload = {
+  userId: string;
+  role: UserRole;
+  login: string;
+};

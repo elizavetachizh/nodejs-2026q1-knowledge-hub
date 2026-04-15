@@ -8,9 +8,22 @@ import { UpdatePasswordDto } from './dto/update-password.dto';
 import { PublicUser } from './user.types';
 import { PrismaService } from 'prisma/prisma.service';
 import { toPrismaRole, toPublicUser } from './utils/user.mapper';
+import { User } from 'generated/prisma/browser';
 
 @Injectable()
 export class UserService {
+  private getSaltRounds():number{
+    return parseInt(process.env.CRYPT_SALT || '10');
+  }
+  private async findUserOrThrow(id: string): Promise<User>{
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    return user;
+  }
   constructor(private readonly prisma: PrismaService) {}
 
   async getUsers(): Promise<PublicUser[]> {

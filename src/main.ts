@@ -11,7 +11,7 @@ const port = process.env.PORT || 4000;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(loggingMiddleware);
-  app.useGlobalGuards(new AccessGuard());
+  app.useGlobalGuards(app.get(AccessGuard));
   // Global use of ValidationPipe
   app.useGlobalPipes(
     new ValidationPipe({
