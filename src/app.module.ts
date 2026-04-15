@@ -6,6 +6,7 @@ import { ArticleModule } from './article/article.module';
 import { CategoryModule } from './category/category.module';
 import { CommentModule } from './comment/comment.module';
 import { PrismaModule } from 'prisma/src/prisma/prisma.module';
+import { AccessGuard } from './common/guards/access.guard';
 
 @Module({
   imports: [
@@ -16,6 +17,6 @@ import { PrismaModule } from 'prisma/src/prisma/prisma.module';
     CommentModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, AccessGuard],
 })
 export class AppModule {}

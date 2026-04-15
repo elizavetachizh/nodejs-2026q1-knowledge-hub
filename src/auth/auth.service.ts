@@ -6,15 +6,11 @@ import {
 import { PrismaService } from 'prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
-import {
-  fromPrismaRole,
-  toPublicUser,
-} from 'src/user/utils/user.mapper';
+import { fromPrismaRole } from 'src/user/utils/user.mapper';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from 'src/user/dto/create-user.dto';
 import { PublicUser } from 'src/user/user.types';
-import { Prisma } from 'generated/prisma/client';
 import { RefreshDto } from './dto/refresh.dto';
 import { JwtPayload } from './auth.types';
 import { UsersWriteService } from 'src/user/user-credentials.service';
@@ -110,13 +106,13 @@ export class AuthService {
     return tokens;
   }
 
-  async signup(signupDto: SignupDto): Promise<PublicUser> {
-  return this.usersWriteService.createUserWithPassword({
-    login: signupDto.login,
-    password: signupDto.password,
-    role: UserRole.VIEWER,
-   });
-
+  async signup(signupDto: SignupDto): Promise<{message: string}> {
+    await this.usersWriteService.createUserWithPassword({
+      login: signupDto.login,
+      password: signupDto.password,
+      role: UserRole.VIEWER,
+    });
+    return {message: 'User created successfully'};
   }
 
   async refreshToken(
