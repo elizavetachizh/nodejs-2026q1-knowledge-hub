@@ -1,13 +1,35 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Article } from './article.types';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { PrismaService } from 'prisma/prisma.service';
 import { toArticleDto, toPrismaStatus } from './utils/article.mapper';
+import { UserRole } from 'src/user/dto/create-user.dto';
+import { JwtPayload } from 'src/auth/auth.types';
 
 @Injectable()
 export class ArticleService {
   constructor(private readonly prisma: PrismaService) {}
+  private assertEditorOwnsArticle(actor: JwtPayload, authorId: string | null) {
+    if (actor.role === UserRole.ADMIN) return;
+    if (actor.role === UserRole.EDITOR) {
+      if (!authorId) {
+        throw new ForbiddenException(
+          'Editor can not modify article without author',
+        );
+      }
+      if (authorId !== actor.userId) {
+        throw new ForbiddenException('Editor can modify only own articles');
+      }
+      return;
+    }
+
+    throw new ForbiddenException('Insufficient permissions');
+  }
   async getArticles(
     status?: ArticleStatus,
     categoryId?: string,
@@ -49,12 +71,25 @@ export class ArticleService {
     return toArticleDto(row);
   }
 
-  async createArticle(createArticleDto: CreateArticleDto): Promise<Article> {
+  async createArticle(
+    createArticleDto: CreateArticleDto,
+    actor: JwtPayload,
+  ): Promise<Article> {
+    let finalAuthorId;
+    if (actor.role === UserRole.ADMIN) {
+      finalAuthorId = createArticleDto.authorId;
+    } else if (actor.role === UserRole.EDITOR) {
+      finalAuthorId = actor.userId;
+    } else {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+    this.assertEditorOwnsArticle(actor, finalAuthorId);
+
     const row = await this.prisma.article.create({
       data: {
         title: createArticleDto.title,
         content: createArticleDto.content,
-        authorId: createArticleDto.authorId,
+        authorId: finalAuthorId,
         categoryId: createArticleDto.categoryId,
         status: toPrismaStatus(createArticleDto.status),
         tags: {
@@ -68,12 +103,14 @@ export class ArticleService {
         tags: true,
       },
     });
+
     return toArticleDto(row);
   }
 
   async updateArticle(
     id: string,
     updateArticleDto: UpdateArticleDto,
+    actor: JwtPayload,
   ): Promise<Article> {
     const article = await this.prisma.article.findUnique({
       where: { id },
@@ -81,6 +118,21 @@ export class ArticleService {
     if (!article)
       throw new NotFoundException(`Article with id ${id} not found`);
 
+    this.assertEditorOwnsArticle(actor, article.authorId);
+
+    if (
+      actor.role === UserRole.EDITOR &&
+      updateArticleDto.authorId &&
+      updateArticleDto.authorId !== actor.userId
+    ) {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+    let finalAuthorId: string | null = null;
+    if (actor.role === UserRole.ADMIN) {
+      finalAuthorId = updateArticleDto.authorId;
+    } else if (actor.role === UserRole.EDITOR) {
+      finalAuthorId = actor.userId;
+    }
     const row = await this.prisma.article.update({
       where: { id },
       data: {
@@ -90,7 +142,7 @@ export class ArticleService {
           ? { status: toPrismaStatus(updateArticleDto.status) }
           : {}),
         ...(updateArticleDto.authorId !== undefined
-          ? { authorId: updateArticleDto.authorId }
+          ? { authorId: finalAuthorId }
           : {}),
         ...(updateArticleDto.categoryId !== undefined
           ? { categoryId: updateArticleDto.categoryId }
@@ -127,14 +179,14 @@ export class ArticleService {
     });
   }
 
-  async deleteArticle(id: string): Promise<void> {
+  async deleteArticle(id: string, actor: JwtPayload): Promise<void> {
     const article = await this.prisma.article.findUnique({
       where: { id },
     });
     if (!article) {
       throw new NotFoundException(`Article with id ${id} not found`);
     }
-
+    this.assertEditorOwnsArticle(actor, article.authorId);
     await this.prisma.article.delete({
       where: { id },
     });

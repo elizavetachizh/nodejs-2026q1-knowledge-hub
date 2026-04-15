@@ -15,9 +15,10 @@ import {
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from 'src/user/dto/create-user.dto';
-import { JwtPayload, PublicUser } from 'src/user/user.types';
+import { PublicUser } from 'src/user/user.types';
 import { Prisma } from 'generated/prisma/client';
 import { RefreshDto } from './dto/refresh.dto';
+import { JwtPayload } from './auth.types';
 
 @Injectable()
 export class AuthService {

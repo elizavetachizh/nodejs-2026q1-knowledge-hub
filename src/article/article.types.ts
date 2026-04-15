@@ -11,3 +11,12 @@ export type Article = {
   createdAt: number; // timestamp of creation
   updatedAt: number; // timestamp of last update
 };
+
+export type ArticleCreateInput = Omit<Article, 'id' | 'createdAt' | 'updatedAt'> & {
+  tags: {
+    connectOrCreate: {
+      where: { name: string };
+      create: { name: string };
+    }[];
+  };
+};

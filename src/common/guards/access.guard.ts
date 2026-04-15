@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { UserRole } from 'src/user/dto/create-user.dto';
 
 // Temporary empty guard stub for future access checks
 @Injectable()
@@ -15,10 +16,10 @@ export class AccessGuard implements CanActivate {
     method: string,
     path: string,
   ): boolean => {
-    if (role === 'admin') return true;
+    if (role === UserRole.ADMIN) return true;
 
-    if (role === 'viewer') return method === 'GET';
-    if (role === 'editor') {
+    if (role === UserRole.VIEWER) return method === 'GET';
+    if (role === UserRole.EDITOR) {
       if (path.startsWith('/category') && method !== 'GET') return false;
       if (path.startsWith('/user') && method !== 'GET') return false;
       if (
