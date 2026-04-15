@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -9,7 +8,6 @@ import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import {
   fromPrismaRole,
-  toPrismaRole,
   toPublicUser,
 } from 'src/user/utils/user.mapper';
 import * as bcrypt from 'bcrypt';
@@ -19,12 +17,14 @@ import { PublicUser } from 'src/user/user.types';
 import { Prisma } from 'generated/prisma/client';
 import { RefreshDto } from './dto/refresh.dto';
 import { JwtPayload } from './auth.types';
+import { UsersWriteService } from 'src/user/user-credentials.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly usersWriteService: UsersWriteService,
   ) {}
 
   //helpers
@@ -56,18 +56,6 @@ export class AuthService {
     const parsed = Number(process.env.CRYPT_SALT);
     if (!Number.isFinite(parsed) || parsed <= 0) return 10;
     return parsed;
-  }
-
-  private isPrismaUniqueConstraintError(
-    error: unknown,
-    field: string,
-  ): boolean {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-
-    if (error.code !== 'P2002') return false;
-    const target = error.meta?.target;
-    if (!Array.isArray(target)) return false;
-    return target.includes(field);
   }
 
   private async issueTokens(
@@ -123,33 +111,12 @@ export class AuthService {
   }
 
   async signup(signupDto: SignupDto): Promise<PublicUser> {
-    const existing = await this.prisma.user.findUnique({
-      where: { login: signupDto.login },
-    });
-    if (existing) {
-      throw new BadRequestException('Login already taken');
-    }
+  return this.usersWriteService.createUserWithPassword({
+    login: signupDto.login,
+    password: signupDto.password,
+    role: UserRole.VIEWER,
+   });
 
-    try {
-      const hashedPassword = await bcrypt.hash(
-        signupDto.password,
-        this.getSaltRounds(),
-      );
-
-      const user = await this.prisma.user.create({
-        data: {
-          login: signupDto.login,
-          password: hashedPassword,
-          role: toPrismaRole(UserRole.VIEWER),
-        },
-      });
-      return toPublicUser(user);
-    } catch (error) {
-      if (this.isPrismaUniqueConstraintError(error, 'login')) {
-        throw new BadRequestException('Login already taken');
-      }
-      throw error;
-    }
   }
 
   async refreshToken(

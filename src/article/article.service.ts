@@ -14,6 +14,7 @@ import { JwtPayload } from 'src/auth/auth.types';
 @Injectable()
 export class ArticleService {
   constructor(private readonly prisma: PrismaService) {}
+
   private assertEditorOwnsArticle(actor: JwtPayload, authorId: string | null) {
     if (actor.role === UserRole.ADMIN) return;
     if (actor.role === UserRole.EDITOR) {
@@ -48,17 +49,6 @@ export class ArticleService {
     return raws.map((row) => toArticleDto(row));
   }
 
-  // Used by CommentService, without 404 handling
-  async findArticleById(id: string): Promise<Article | null> {
-    const row = await this.prisma.article.findUnique({
-      where: { id: id },
-      include: { tags: true },
-    });
-    if (!row) return null;
-    return toArticleDto(row);
-  }
-
-  // Main GET by id
   async getArticle(id: string): Promise<Article> {
     const row = await this.prisma.article.findUnique({
       where: { id },
@@ -75,7 +65,7 @@ export class ArticleService {
     createArticleDto: CreateArticleDto,
     actor: JwtPayload,
   ): Promise<Article> {
-    let finalAuthorId;
+    let finalAuthorId: string;
     if (actor.role === UserRole.ADMIN) {
       finalAuthorId = createArticleDto.authorId;
     } else if (actor.role === UserRole.EDITOR) {
@@ -164,19 +154,6 @@ export class ArticleService {
       },
     });
     return toArticleDto(row);
-  }
-  async clearCategoryId(categoryId: string) {
-    return this.prisma.article.updateMany({
-      where: { categoryId },
-      data: { categoryId: null },
-    });
-  }
-
-  async clearAuthorId(authorId: string) {
-    return this.prisma.article.updateMany({
-      where: { authorId },
-      data: { authorId: null },
-    });
   }
 
   async deleteArticle(id: string, actor: JwtPayload): Promise<void> {
