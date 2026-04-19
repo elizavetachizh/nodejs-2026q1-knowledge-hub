@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+enum ArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String   @id @default(uuid())
+  login      String   
+  password   String
+  role       UserRole @default(VIEWER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  articles   Article[]
+  comments   Comment[]
+}
+
+model Article {
+  id         String        @id @default(uuid())
+  title      String        @db.VarChar(255)
+  content    String        @db.Text
+  status     ArticleStatus @default(DRAFT)
+  authorId   String?
+  categoryId String?
+  tags       Tag[]
+  comments   Comment[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  author     User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([categoryId])
+}
+
+model Category {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  description  String   @db.Text
+  articles     Article[]
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  content    String   @db.Text
+  authorId   String?
+  articleId  String
+  createdAt  DateTime @default(now())
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+}
+
+model Tag {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  articles Article[]
+}

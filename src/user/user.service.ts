@@ -1,81 +1,81 @@
 import {
   ForbiddenException,
-  forwardRef,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateUserDto, UserRole } from './dto/create-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
-import { InternalUser, PublicUser } from './user.types';
-import { randomUUID } from 'node:crypto';
-import { ArticleService } from '../article/article.service';
-import { CommentService } from '../comment/comment.service';
+import { PublicUser } from './user.types';
+import { PrismaService } from 'prisma/prisma.service';
+import { toPrismaRole, toPublicUser } from './utils/user.mapper';
 
 @Injectable()
 export class UserService {
-  private users: InternalUser[] = [];
-  constructor(
-    @Inject(forwardRef(() => CommentService))
-    private readonly commentService: CommentService,
-    private readonly articleService: ArticleService,
-  ) {}
-  private toPublicUser(user: InternalUser): PublicUser {
-    return {
-      id: user.id,
-      login: user.login,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+  constructor(private readonly prisma: PrismaService) {}
+
+  async getUsers(): Promise<PublicUser[]> {
+    const users = await this.prisma.user.findMany();
+    return users.map((user) => toPublicUser(user));
   }
 
-  getUsers(): PublicUser[] {
-    return this.users.map((u) => this.toPublicUser(u));
-  }
-
-  getUser(id: string): PublicUser {
-    const user = this.users.find((u) => u.id === id);
+  async getUser(id: string): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    return this.toPublicUser(user);
+    return toPublicUser(user);
   }
 
-  create(createUserDto: CreateUserDto) {
-    const now = new Date().getTime();
-    const user: InternalUser = {
-      id: randomUUID(),
-      login: createUserDto.login,
-      password: createUserDto.password,
-      role: createUserDto.role ? createUserDto.role : UserRole.VIEWER,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.users.push(user);
-    return this.toPublicUser(user);
+  async createUser(createUserDto: CreateUserDto): Promise<PublicUser> {
+    const user = await this.prisma.user.create({
+      data: {
+        login: createUserDto.login,
+        password: createUserDto.password,
+        role: toPrismaRole(createUserDto.role),
+      },
+    });
+    return toPublicUser(user);
   }
 
-  update(id: string, updatePasswordDto: UpdatePasswordDto) {
-    const user = this.users.find((u) => u.id === id);
+  async updateUser(
+    id: string,
+    updatePasswordDto: UpdatePasswordDto,
+  ): Promise<PublicUser> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
     if (user.password !== updatePasswordDto.oldPassword) {
       throw new ForbiddenException('Invalid password');
     }
-    user.password = updatePasswordDto.newPassword;
-    user.updatedAt = new Date().getTime();
-    return this.toPublicUser(user);
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: {
+        password: updatePasswordDto.newPassword,
+      },
+    });
+    return toPublicUser(updatedUser);
   }
 
-  delete(id: string): void {
-    const user = this.users.find((u) => u.id === id);
+  async deleteUser(id: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    this.commentService.deleteCommentByAuthorId(id);
-    this.articleService.clearAuthorId(id);
-    this.users = this.users.filter((u) => u.id !== id);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.article.updateMany({
+        where: { authorId: id },
+        data: { authorId: null },
+      });
+      await tx.user.delete({
+        where: { id },
+      });
+    });
   }
 }

@@ -16,6 +16,7 @@ import { UpdatePasswordDto } from './dto/update-password.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { sortData } from 'src/common/utils/sort';
+import { PublicUser } from './user.types';
 
 @ApiTags('User')
 @Controller('user')
@@ -47,14 +48,14 @@ export class UserController {
     type: String,
     description: 'Sort order',
   })
-  getUsers(
+  async getUsers(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('sortBy') sortBy?: string,
     @Query('order') order?: 'asc' | 'desc',
     @Query() rawQuery?: Record<string, unknown>,
-  ) {
-    const users = this.userService.getUsers();
+  ): Promise<PublicUser[] | PageDto<PublicUser>> {
+    const users = await this.userService.getUsers();
     const hasSorting =
       typeof rawQuery?.sortBy === 'string' &&
       (rawQuery.sortBy as string).length > 0;
@@ -76,24 +77,24 @@ export class UserController {
   }
 
   @Get(':id')
-  getUser(@Param('id', ParseUUIDPipe) id: string) {
+  async getUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.userService.getUser(id);
   }
 
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.userService.create(createUserDto);
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    return this.userService.createUser(createUserDto);
   }
   @Put(':id')
-  update(
+  async updateUser(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updatePasswordDto: UpdatePasswordDto,
-  ) {
-    return this.userService.update(id, updatePasswordDto);
+  ): Promise<PublicUser> {
+    return this.userService.updateUser(id, updatePasswordDto);
   }
   @Delete(':id')
   @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)
-  delete(@Param('id', ParseUUIDPipe) id: string): void {
-    this.userService.delete(id);
+  async deleteUser(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.userService.deleteUser(id);
   }
 }

@@ -22,4 +22,4 @@ COPY --from=build /app/dist ./dist
 # Switch to non-root user
 USER node
 EXPOSE 4000
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

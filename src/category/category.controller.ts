@@ -48,14 +48,14 @@ export class CategoryController {
     type: String,
     description: 'Sort order',
   })
-  getCategories(
+  async getCategories(
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('sortBy') sortBy?: string,
     @Query('order') order?: 'asc' | 'desc',
     @Query() rawQuery?: Record<string, unknown>,
-  ) {
-    const categories: Category[] = this.categoryService.getCategories();
+  ): Promise<Category[] | PageDto<Category>> {
+    const categories: Category[] = await this.categoryService.getCategories();
     const hasSorting =
       typeof rawQuery?.sortBy === 'string' &&
       (rawQuery.sortBy as string).length > 0;
@@ -82,26 +82,26 @@ export class CategoryController {
   }
 
   @Get(':id')
-  getCategory(@Param('id', ParseUUIDPipe) id: string) {
+  async getCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoryService.getCategory(id);
   }
 
   @Post()
-  createCategory(@Body() createCategoryDto: CreateCategoryDto) {
+  async createCategory(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoryService.createCategory(createCategoryDto);
   }
 
   @Put(':id')
-  updateCategory(
+  async updateCategory(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
-  ) {
+  ): Promise<Category> {
     return this.categoryService.updateCategory(id, updateCategoryDto);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  deleteCategory(@Param('id', ParseUUIDPipe) id: string): void {
-    this.categoryService.deleteCategory(id);
+  async deleteCategory(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.categoryService.deleteCategory(id);
   }
 }
