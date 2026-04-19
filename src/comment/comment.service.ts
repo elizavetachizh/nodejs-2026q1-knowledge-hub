@@ -10,6 +10,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { toCommentDto } from './utils/comment.mapper';
 import { JwtPayload } from '../auth/auth.types';
 import { UserRole } from '../user/dto/create-user.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @Injectable()
 export class CommentService {
@@ -79,7 +80,7 @@ export class CommentService {
       data: {
         content: createCommentDto.content,
         articleId: createCommentDto.articleId,
-        authorId: actor.userId,
+        authorId: finalAuthorId,
       },
       include: {
         author: true,
@@ -87,6 +88,24 @@ export class CommentService {
     });
     return toCommentDto(comment);
   }
+
+  async updateComment(id: string, updateCommentDto: UpdateCommentDto, actor: JwtPayload): Promise<Comment> {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id },
+    });
+    if (!comment) {
+      throw new NotFoundException(`Comment with id ${id} not found`);
+    }
+    this.assertEditorOwnsComment(actor, comment.authorId);
+    const row = await this.prisma.comment.update({
+      where: { id },
+      data: {
+        content: updateCommentDto.content,
+      },
+    });
+    return toCommentDto(row);
+  }
+
 
   async deleteComment(id: string, actor: JwtPayload): Promise<void> {
     const comment = await this.prisma.comment.findUnique({

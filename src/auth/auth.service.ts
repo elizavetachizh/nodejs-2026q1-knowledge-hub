@@ -10,8 +10,7 @@ import { fromPrismaRole } from 'src/user/utils/user.mapper';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from 'src/user/dto/create-user.dto';
-import { PublicUser } from 'src/user/user.types';
-import { RefreshDto } from './dto/refresh.dto';
+import { LogoutDto, RefreshDto } from './dto/refresh.dto';
 import { JwtPayload } from './auth.types';
 import { UsersWriteService } from 'src/user/user-credentials.service';
 
@@ -33,7 +32,8 @@ export class AuthService {
   }
 
   private getRefreshSecret(): string {
-    const secret = process.env.JWT_REFRESH_SECRET;
+    const secret =
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET_REFRESH_KEY;
     if (!secret) {
       throw new Error('JWT_REFRESH_SECRET is not set');
     }
@@ -106,13 +106,13 @@ export class AuthService {
     return tokens;
   }
 
-  async signup(signupDto: SignupDto): Promise<{message: string}> {
-    await this.usersWriteService.createUserWithPassword({
+  async signup(signupDto: SignupDto): Promise<{ id: string; message: string }> {
+    const user = await this.usersWriteService.createUserWithPassword({
       login: signupDto.login,
       password: signupDto.password,
       role: UserRole.VIEWER,
     });
-    return {message: 'User created successfully'};
+    return { id: user.id, message: 'User created successfully' };
   }
 
   async refreshToken(
@@ -153,5 +153,36 @@ export class AuthService {
     const newTokens = await this.issueTokens(newPayload);
     await this.saveRefreshHash(user.id, newTokens.refreshToken);
     return newTokens;
+  }
+  async logout(logoutDto: LogoutDto): Promise<{ message: string }> {
+    if (!logoutDto.refreshToken) {
+      throw new UnauthorizedException('No refresh token provided');
+    }
+    let payload: JwtPayload;
+    try {
+      payload = await this.jwtService.verifyAsync(logoutDto.refreshToken, {
+        secret: this.getRefreshSecret(),
+      });
+    } catch {
+      throw new ForbiddenException('Invalid refresh token');
+    }
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+    });
+    if (!user || !user.refreshTokenHash) {
+      throw new ForbiddenException('Invalid refresh token');
+    }
+    const rtMatches = await bcrypt.compare(
+      logoutDto.refreshToken,
+      user.refreshTokenHash,
+    );
+    if (!rtMatches) {
+      throw new ForbiddenException('Invalid refresh token');
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { refreshTokenHash: null },
+    });
+    return { message: 'Logged out successfully' };
   }
 }

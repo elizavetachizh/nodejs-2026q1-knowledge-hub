@@ -35,7 +35,10 @@ export class UsersWriteService {
       where: { login: input.login },
     });
     if (existing) {
-      throw new BadRequestException('Login already taken');
+      throw new BadRequestException({
+        message: 'Login already taken',
+        id: existing.id,
+      });
     }
     const hashedPassword = await bcrypt.hash(
       input.password,
@@ -52,7 +55,13 @@ export class UsersWriteService {
       return toPublicUser(user);
     } catch (error) {
       if (this.isPrismaUniqueConstraintError(error, 'login')) {
-        throw new BadRequestException('Login already taken');
+        const duplicate = await this.prisma.user.findUnique({
+          where: { login: input.login },
+        });
+        throw new BadRequestException({
+          message: 'Login already taken',
+          id: duplicate?.id,
+        });
       }
       throw error;
     }

@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import { ArticleStatus, UserRole } from '../generated/prisma/enums';
 import { Pool } from 'pg';
+import * as bcrypt from 'bcrypt';
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const pool = new Pool({ connectionString });
@@ -17,11 +18,14 @@ async function main() {
   await prisma.category.deleteMany();
   await prisma.user.deleteMany();
 
+
+  const hashedPasswordAdmin = await bcrypt.hash('admin123', 10);
+  const hashedPasswordEditor = await bcrypt.hash('editor123', 10);
   // users
   const admin = await prisma.user.create({
     data: {
       login: 'admin',
-      password: 'admin123',
+      password: hashedPasswordAdmin,
       role: UserRole.ADMIN,
     },
   });
@@ -29,7 +33,7 @@ async function main() {
   const editor = await prisma.user.create({
     data: {
       login: 'editor',
-      password: 'editor123',
+      password: hashedPasswordEditor,
       role: UserRole.EDITOR,
     },
   });

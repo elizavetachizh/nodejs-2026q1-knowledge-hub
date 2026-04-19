@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -96,10 +97,22 @@ export class UserController {
   }
   @Put(':id')
   async updateUser(
+    @Req() request: AuthRequest,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updatePasswordDto: UpdatePasswordDto,
+    @Body() body: UpdatePasswordDto | UpdateUserRoleDto,
   ): Promise<PublicUser> {
-    return this.userService.updateUser(id, updatePasswordDto);
+    if ('role' in body) {
+      return this.userService.updateUserRole(id, body, request.user);
+    }
+    if (
+      typeof body.oldPassword !== 'string' ||
+      typeof body.newPassword !== 'string'
+    ) {
+      throw new BadRequestException(
+        'oldPassword and newPassword are required for password update',
+      );
+    }
+    return this.userService.updateUser(id, body);
   }
   @Patch(':id')
   async updateUserRole(

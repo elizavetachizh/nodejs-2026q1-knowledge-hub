@@ -8,7 +8,6 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from 'src/user/dto/create-user.dto';
 
-// Temporary empty guard stub for future access checks
 @Injectable()
 export class AccessGuard implements CanActivate {
   private roleAllows = (
@@ -16,10 +15,12 @@ export class AccessGuard implements CanActivate {
     method: string,
     path: string,
   ): boolean => {
+    if (path === '/auth/logout' && method === 'POST') return true;
     if (role === UserRole.ADMIN) return true;
 
     if (role === UserRole.VIEWER) return method === 'GET';
     if (role === UserRole.EDITOR) {
+      if (method === 'GET') return true;
       if (path.startsWith('/category') && method !== 'GET') return false;
       if (path.startsWith('/user') && method !== 'GET') return false;
       if (
@@ -34,7 +35,9 @@ export class AccessGuard implements CanActivate {
   private isPublicRoute(path: string) {
     if (path === '/') return true;
     if (path.startsWith('/doc')) return true;
-    if (path.startsWith('/auth')) return true;
+    if (path === '/auth/signup') return true;
+    if (path === '/auth/login') return true;
+    if (path === '/auth/refresh') return true;
     return false;
   }
   private isBearerToken(authorizationHeader: unknown): string {

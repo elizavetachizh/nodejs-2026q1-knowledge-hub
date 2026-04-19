@@ -27,6 +27,16 @@ async function bootstrap() {
       'Knowledge hub service for managing articles, categories, and comments',
     )
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Paste access token as: Bearer <token>',
+      },
+      'bearer',
+    )
+    .addSecurityRequirements('bearer')
     .addTag('knowledge-hub')
     .addTag('Article', 'Operations with articles: create, read, update, delete')
     .addTag('User', 'Operations with users and roles')
