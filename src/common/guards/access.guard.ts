@@ -1,5 +1,5 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-//пока что пустой guard заглушка для будущих проверок доступа
+// Temporary empty guard stub for future access checks
 @Injectable()
 export class AccessGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {

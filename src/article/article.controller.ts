@@ -10,7 +10,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiQuery } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ArticleService } from './article.service';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -18,6 +18,7 @@ import { PageDto } from 'src/common/dto/page-query.dto';
 import { sortData } from 'src/common/utils/sort';
 import { Article } from './article.types';
 
+@ApiTags('Article')
 @Controller('article')
 export class ArticleController {
   constructor(private readonly articleService: ArticleService) {}
@@ -65,7 +66,7 @@ export class ArticleController {
     type: Number,
     description: 'Limit number',
   })
-  getArticles(
+  async getArticles(
     @Query('status') status?: ArticleStatus,
     @Query('categoryId') categoryId?: string,
     @Query('tag') tag?: string,
@@ -74,8 +75,8 @@ export class ArticleController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query() rawQuery?: Record<string, unknown>,
-  ) {
-    const articles: Article[] = this.articleService.getArticles(
+  ): Promise<Article[] | PageDto<Article>> {
+    const articles: Article[] = await this.articleService.getArticles(
       status,
       categoryId,
       tag,
@@ -112,26 +113,28 @@ export class ArticleController {
   }
 
   @Get(':id')
-  getArticle(@Param('id', ParseUUIDPipe) id: string) {
+  async getArticle(@Param('id', ParseUUIDPipe) id: string): Promise<Article> {
     return this.articleService.getArticle(id);
   }
 
   @Post()
-  createArticle(@Body() createArticleDto: CreateArticleDto) {
+  async createArticle(
+    @Body() createArticleDto: CreateArticleDto,
+  ): Promise<Article> {
     return this.articleService.createArticle(createArticleDto);
   }
 
   @Put(':id')
-  updateArticle(
+  async updateArticle(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateArticleDto: UpdateArticleDto,
-  ) {
+  ): Promise<Article> {
     return this.articleService.updateArticle(id, updateArticleDto);
   }
 
   @Delete(':id')
   @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)
-  deleteArticle(@Param('id', ParseUUIDPipe) id: string): void {
-    this.articleService.deleteArticle(id);
+  async deleteArticle(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.articleService.deleteArticle(id);
   }
 }

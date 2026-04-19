@@ -9,13 +9,14 @@ import {
   Delete,
   Query,
 } from '@nestjs/common';
-import { ApiQuery } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
 import { sortData } from 'src/common/utils/sort';
 import { Comment } from './comment.types';
 
+@ApiTags('Comment')
 @Controller('comment')
 export class CommentController {
   constructor(private readonly commentService: CommentService) {}
@@ -51,15 +52,16 @@ export class CommentController {
     type: Number,
     description: 'Limit number',
   })
-  getComments(
+  async getComments(
     @Query('articleId', ParseUUIDPipe) articleId: string,
     @Query('sortBy') sortBy?: string,
     @Query('order') order?: 'asc' | 'desc',
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query() rawQuery?: Record<string, unknown>,
-  ) {
-    const comments: Comment[] = this.commentService.getComments(articleId);
+  ): Promise<Comment[] | PageDto<Comment>> {
+    const comments: Comment[] =
+      await this.commentService.getComments(articleId);
     const hasSorting =
       typeof rawQuery?.sortBy === 'string' &&
       (rawQuery.sortBy as string).length > 0;
@@ -86,18 +88,18 @@ export class CommentController {
   }
 
   @Get(':id')
-  getComment(@Param('id', ParseUUIDPipe) id: string) {
+  async getComment(@Param('id', ParseUUIDPipe) id: string) {
     return this.commentService.getComment(id);
   }
 
   @Post()
-  createComment(@Body() createCommentDto: CreateCommentDto) {
+  async createComment(@Body() createCommentDto: CreateCommentDto) {
     return this.commentService.createComment(createCommentDto);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  deleteComment(@Param('id', ParseUUIDPipe) id: string): void {
-    this.commentService.deleteComment(id);
+  async deleteComment(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.commentService.deleteComment(id);
   }
 }
