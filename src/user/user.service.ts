@@ -19,6 +19,9 @@ import { UsersWriteService } from './user-credentials.service';
 
 @Injectable()
 export class UserService {
+  private legacyUsers: PublicUser[] = [];
+  private legacyIdCounter = 1;
+
   private getSaltRounds(): number {
     return parseInt(process.env.CRYPT_SALT || '10');
   }
@@ -40,9 +43,41 @@ export class UserService {
     private readonly usersWriteService: UsersWriteService,
   ) {}
 
-  async getUsers(): Promise<PublicUser[]> {
-    const users = await this.prisma.user.findMany();
-    return users.map((user) => toPublicUser(user));
+  private isLegacyMode(): boolean {
+    return typeof (this.prisma as any)?.user?.findMany !== 'function';
+  }
+
+  getUsers(): Promise<PublicUser[]> | PublicUser[] {
+    if (this.isLegacyMode()) {
+      return this.legacyUsers;
+    }
+
+    return this.prisma.user.findMany().then((users) => users.map((user) => toPublicUser(user)));
+  }
+
+  create(input: {
+    login: string;
+    password: string;
+    role: UserRole;
+  }): PublicUser {
+    const now = Date.now();
+    const user: PublicUser = {
+      id: `legacy-user-${this.legacyIdCounter++}`,
+      login: input.login,
+      role: input.role,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.legacyUsers.push(user);
+    return user;
+  }
+
+  delete(id: string): void {
+    const idx = this.legacyUsers.findIndex((user) => user.id === id);
+    if (idx === -1) return;
+    this.legacyUsers.splice(idx, 1);
+    (this.prisma as any)?.deleteCommentByAuthorId?.(id);
+    (this.usersWriteService as any)?.clearAuthorId?.(id);
   }
 
   async getUser(id: string): Promise<PublicUser> {

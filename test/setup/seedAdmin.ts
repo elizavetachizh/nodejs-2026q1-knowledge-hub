@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import * as bcrypt from 'bcrypt';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 export const SEED_ADMIN_LOGIN = 'TEST_SEED_ADMIN';
@@ -15,11 +15,11 @@ export default async function globalSetup(): Promise<void> {
   try {
     await prisma.user.upsert({
       where: { login: SEED_ADMIN_LOGIN },
-      update: { role: 'admin', password: hashedPassword },
+      update: { role: UserRole.ADMIN, password: hashedPassword },
       create: {
         login: SEED_ADMIN_LOGIN,
         password: hashedPassword,
-        role: 'admin',
+        role: UserRole.ADMIN,
       },
     });
   } finally {
