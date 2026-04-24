@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { ArticleService } from 'src/article/article.service';
 import { JwtPayload } from 'src/auth/auth.types';
@@ -16,6 +20,14 @@ const editorActor: JwtPayload = {
   role: UserRole.EDITOR,
   login: 'editor1',
 };
+
+const adminActor: JwtPayload = {
+  userId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  role: UserRole.ADMIN,
+  login: 'admin1',
+};
+
+const otherAuthorId = '990e8400-e29b-41d4-a716-446655440000';
 
 function makePrismaMock() {
   return {
@@ -42,6 +54,7 @@ function prismaArticleRow(
     id: string;
     title: string;
     content: string;
+    status: PrismaArticleStatus;
     authorId: string | null;
     categoryId: string | null;
     tags: { name: string }[];
@@ -78,6 +91,23 @@ describe('ArticleService', () => {
     await articleService.getArticles(undefined, categoryId, undefined);
     expect(prisma.article.findMany).toHaveBeenCalledWith({
       where: { categoryId },
+      include: { tags: true },
+    });
+  });
+
+  it('getArticles combines status, categoryId, and tag filters', async () => {
+    prisma.article.findMany.mockResolvedValue([]);
+    await articleService.getArticles(
+      ArticleStatus.PUBLISHED,
+      categoryId,
+      'news',
+    );
+    expect(prisma.article.findMany).toHaveBeenCalledWith({
+      where: {
+        status: toPrismaStatus(ArticleStatus.PUBLISHED),
+        categoryId,
+        tags: { some: { name: 'news' } },
+      },
       include: { tags: true },
     });
   });
@@ -152,6 +182,43 @@ describe('createArticle', () => {
     });
   });
 
+  it('createArticle dedupes and trims tags', async () => {
+    const dto = {
+      title: 'Article 1',
+      content: 'Content 1',
+      status: ArticleStatus.DRAFT,
+      tags: [' tag1 ', 'tag1', 'tag2', ''],
+      authorId: editorId,
+      categoryId,
+    };
+
+    prisma.article.create.mockResolvedValue(
+      prismaArticleRow({
+        title: dto.title,
+        content: dto.content,
+      }),
+    );
+
+    await articleService.createArticle(dto, editorActor);
+
+    expect(prisma.article.create).toHaveBeenCalledWith({
+      data: {
+        title: dto.title,
+        content: dto.content,
+        authorId: editorActor.userId,
+        status: toPrismaStatus(dto.status),
+        categoryId: dto.categoryId,
+        tags: {
+          connectOrCreate: ['tag1', 'tag2'].map((tag) => ({
+            where: { name: tag },
+            create: { name: tag },
+          })),
+        },
+      },
+      include: { tags: true },
+    });
+  });
+
   it('createArticle forbids viewer', async () => {
     const dto = {
       title: 'Article 1',
@@ -161,7 +228,7 @@ describe('createArticle', () => {
       tags: ['tag1'],
     };
     const viewer: JwtPayload = {
-      userId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      userId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
       role: UserRole.VIEWER,
       login: 'viewer1',
     };
@@ -170,6 +237,33 @@ describe('createArticle', () => {
       ForbiddenException,
     );
     expect(prisma.article.create).not.toHaveBeenCalled();
+  });
+
+  it('admin create keeps authorId from dto', async () => {
+    const dto = {
+      title: 'Article 1',
+      content: 'Content 1',
+      status: ArticleStatus.DRAFT,
+      authorId: otherAuthorId,
+      categoryId,
+      tags: [] as string[],
+    };
+    prisma.article.create.mockResolvedValue(
+      prismaArticleRow({
+        title: dto.title,
+        authorId: otherAuthorId,
+      }),
+    );
+
+    await articleService.createArticle(dto, adminActor);
+
+    expect(prisma.article.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          authorId: otherAuthorId,
+        }),
+      }),
+    );
   });
 });
 
@@ -257,6 +351,29 @@ describe('updateArticle', () => {
     });
   });
 
+  it('forbids editor from reassigning authorId to another user', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      articleService.updateArticle(
+        existing.id,
+        {
+          title: 't',
+          content: 'c',
+          authorId: otherAuthorId,
+          categoryId,
+          tags: ['x'],
+        },
+        editorActor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.article.update).not.toHaveBeenCalled();
+  });
+
   it('throws NotFoundException when article missing', async () => {
     prisma.article.findUnique.mockResolvedValue(null);
 
@@ -273,6 +390,144 @@ describe('updateArticle', () => {
         editorActor,
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.article.update).not.toHaveBeenCalled();
+  });
+
+  it('allows draft → published', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+      status: PrismaArticleStatus.DRAFT,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+    prisma.article.update.mockResolvedValue(
+      prismaArticleRow({
+        ...existing,
+        status: PrismaArticleStatus.PUBLISHED,
+      }),
+    );
+
+    await articleService.updateArticle(
+      existing.id,
+      {
+        title: existing.title,
+        content: existing.content,
+        status: ArticleStatus.PUBLISHED,
+        authorId: editorId,
+        categoryId,
+        tags: ['tag1'],
+      },
+      editorActor,
+    );
+
+    expect(prisma.article.update).toHaveBeenCalled();
+  });
+
+  it('allows published → archived', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+      status: PrismaArticleStatus.PUBLISHED,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+    prisma.article.update.mockResolvedValue(
+      prismaArticleRow({
+        ...existing,
+        status: PrismaArticleStatus.ARCHIVED,
+      }),
+    );
+
+    await articleService.updateArticle(
+      existing.id,
+      {
+        title: existing.title,
+        content: existing.content,
+        status: ArticleStatus.ARCHIVED,
+        authorId: editorId,
+        categoryId,
+        tags: ['tag1'],
+      },
+      editorActor,
+    );
+
+    expect(prisma.article.update).toHaveBeenCalled();
+  });
+
+  it('rejects published → draft', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+      status: PrismaArticleStatus.PUBLISHED,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      articleService.updateArticle(
+        existing.id,
+        {
+          title: existing.title,
+          content: existing.content,
+          status: ArticleStatus.DRAFT,
+          authorId: editorId,
+          categoryId,
+          tags: ['tag1'],
+        },
+        editorActor,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.article.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects draft → archived', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+      status: PrismaArticleStatus.DRAFT,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      articleService.updateArticle(
+        existing.id,
+        {
+          title: existing.title,
+          content: existing.content,
+          status: ArticleStatus.ARCHIVED,
+          authorId: editorId,
+          categoryId,
+          tags: ['tag1'],
+        },
+        editorActor,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(prisma.article.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects any transition from archived', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+      status: PrismaArticleStatus.ARCHIVED,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      articleService.updateArticle(
+        existing.id,
+        {
+          title: existing.title,
+          content: existing.content,
+          status: ArticleStatus.PUBLISHED,
+          authorId: editorId,
+          categoryId,
+          tags: ['tag1'],
+        },
+        editorActor,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });

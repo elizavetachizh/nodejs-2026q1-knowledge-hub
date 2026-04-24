@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,7 +8,11 @@ import { Article } from './article.types';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { PrismaService } from 'prisma/prisma.service';
-import { toArticleDto, toPrismaStatus } from './utils/article.mapper';
+import {
+  fromPrismaStatus,
+  toArticleDto,
+  toPrismaStatus,
+} from './utils/article.mapper';
 import { UserRole } from 'src/user/dto/create-user.dto';
 import { JwtPayload } from 'src/auth/auth.types';
 
@@ -20,6 +25,33 @@ export class ArticleService {
     return typeof (this.prisma as any)?.article?.create !== 'function';
   }
 
+  private normalizeTagNames(tags?: string[]): string[] {
+    if (!tags?.length) return [];
+    const seen = new Set<string>();
+    for (const t of tags) {
+      const s = typeof t === 'string' ? t.trim() : '';
+      if (s) seen.add(s);
+    }
+    return [...seen];
+  }
+
+  private assertStatusTransition(
+    current: ArticleStatus,
+    next: ArticleStatus,
+  ): void {
+    if (current === next) return;
+    const allowed: Record<ArticleStatus, ArticleStatus[]> = {
+      [ArticleStatus.DRAFT]: [ArticleStatus.PUBLISHED],
+      [ArticleStatus.PUBLISHED]: [ArticleStatus.ARCHIVED],
+      [ArticleStatus.ARCHIVED]: [],
+    };
+    if (!allowed[current].includes(next)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${current} → ${next}`,
+      );
+    }
+  }
+
   private createLegacyArticle(createArticleDto: CreateArticleDto): Article {
     const now = Date.now();
     return {
@@ -29,7 +61,7 @@ export class ArticleService {
       status: createArticleDto.status ?? ArticleStatus.DRAFT,
       authorId: createArticleDto.authorId ?? null,
       categoryId: createArticleDto.categoryId ?? null,
-      tags: createArticleDto.tags ?? [],
+      tags: this.normalizeTagNames(createArticleDto.tags),
       createdAt: now,
       updatedAt: now,
     };
@@ -104,6 +136,8 @@ export class ArticleService {
     }
     this.assertEditorOwnsArticle(actor, finalAuthorId);
 
+    const tagNames = this.normalizeTagNames(createArticleDto.tags);
+
     return this.prisma.article
       .create({
         data: {
@@ -113,7 +147,7 @@ export class ArticleService {
           categoryId: createArticleDto.categoryId,
           status: toPrismaStatus(createArticleDto.status),
           tags: {
-            connectOrCreate: createArticleDto.tags?.map((tag) => ({
+            connectOrCreate: tagNames.map((tag) => ({
               where: { name: tag },
               create: { name: tag },
             })),
@@ -138,6 +172,13 @@ export class ArticleService {
       throw new NotFoundException(`Article with id ${id} not found`);
 
     this.assertEditorOwnsArticle(actor, article.authorId);
+
+    if (updateArticleDto.status !== undefined) {
+      this.assertStatusTransition(
+        fromPrismaStatus(article.status),
+        updateArticleDto.status,
+      );
+    }
 
     if (
       actor.role === UserRole.EDITOR &&
@@ -166,11 +207,13 @@ export class ArticleService {
         ...(updateArticleDto.categoryId !== undefined
           ? { categoryId: updateArticleDto.categoryId }
           : {}),
-        ...(updateArticleDto.tags
+        ...(updateArticleDto.tags !== undefined
           ? {
               tags: {
                 set: [],
-                connectOrCreate: updateArticleDto.tags?.map((tag) => ({
+                connectOrCreate: this.normalizeTagNames(
+                  updateArticleDto.tags,
+                ).map((tag) => ({
                   where: { name: tag },
                   create: { name: tag },
                 })),
