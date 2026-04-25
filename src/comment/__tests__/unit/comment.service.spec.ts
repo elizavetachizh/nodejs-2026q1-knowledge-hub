@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtPayload } from 'src/auth/auth.types';
 import { UserRole } from 'src/user/dto/create-user.dto';
@@ -11,6 +15,12 @@ const editorActor: JwtPayload = {
   userId: editorId,
   role: UserRole.EDITOR,
   login: 'editor1',
+};
+
+const adminActor: JwtPayload = {
+  userId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  role: UserRole.ADMIN,
+  login: 'admin1',
 };
 
 function makePrismaMock() {
@@ -142,6 +152,50 @@ describe('createComment', () => {
     });
   });
 
+  it('throws when article does not exist', async () => {
+    const dto = {
+      content: 'Content 1',
+      articleId,
+      authorId: editorId,
+    };
+    prisma.article.findUnique.mockResolvedValue(null);
+
+    await expect(
+      commentService.createComment(dto, editorActor),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(prisma.comment.create).not.toHaveBeenCalled();
+  });
+
+  it('admin can set authorId on create', async () => {
+    const otherAuthor = '990e8400-e29b-41d4-a716-446655440000';
+    const dto = {
+      content: 'Content 1',
+      articleId,
+      authorId: otherAuthor,
+    };
+    prisma.article.findUnique.mockResolvedValue(
+      prismaArticleRow({ id: articleId }),
+    );
+    prisma.comment.create.mockResolvedValue(
+      prismaCommentRow({
+        content: dto.content,
+        articleId,
+        authorId: otherAuthor,
+      }),
+    );
+
+    await commentService.createComment(dto, adminActor);
+
+    expect(prisma.comment.create).toHaveBeenCalledWith({
+      data: {
+        content: dto.content,
+        articleId: dto.articleId,
+        authorId: otherAuthor,
+      },
+      include: { author: true },
+    });
+  });
+
   it('createComment forbids viewer', async () => {
     const dto = {
       content: 'Content 1',
@@ -245,5 +299,30 @@ describe('updateComment', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.comment.update).not.toHaveBeenCalled();
+  });
+
+  it('forbids editor updating another users comment', async () => {
+    const existing = prismaCommentRow({
+      id: 'comment-1',
+      authorId: '990e8400-e29b-41d4-a716-446655440000',
+    });
+    prisma.comment.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      commentService.updateComment(existing.id, { content: 'x' }, editorActor),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.comment.update).not.toHaveBeenCalled();
+  });
+
+  it('forbids editor updating comment without author', async () => {
+    const existing = prismaCommentRow({
+      id: 'comment-1',
+      authorId: null,
+    });
+    prisma.comment.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      commentService.updateComment(existing.id, { content: 'x' }, editorActor),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

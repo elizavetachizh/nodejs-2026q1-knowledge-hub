@@ -11,18 +11,19 @@ function makePrismaMock() {
       upsert: vi.fn(),
       update: vi.fn(),
     },
-    $transaction: vi.fn((callback: (tx: unknown) => unknown | Promise<unknown>) =>
-      Promise.resolve(
-        callback({
-          category: {
-            findUnique: vi.fn(),
-            delete: vi.fn(),
-          },
-          article: {
-            updateMany: vi.fn(),
-          },
-        }),
-      ),
+    $transaction: vi.fn(
+      (callback: (tx: unknown) => unknown | Promise<unknown>) =>
+        Promise.resolve(
+          callback({
+            category: {
+              findUnique: vi.fn(),
+              delete: vi.fn(),
+            },
+            article: {
+              updateMany: vi.fn(),
+            },
+          }),
+        ),
     ),
   };
 }
@@ -58,7 +59,6 @@ describe('CategoryService', () => {
     await categoryService.getCategories();
     expect(prisma.category.findMany).toHaveBeenCalledWith();
   });
-
 });
 
 describe('getCategory', () => {
@@ -127,9 +127,7 @@ describe('deleteCategory', () => {
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
     };
-    prisma.$transaction.mockImplementation((cb) =>
-      Promise.resolve(cb(tx)),
-    );
+    prisma.$transaction.mockImplementation((cb) => Promise.resolve(cb(tx)));
 
     await categoryService.deleteCategory(row.id);
 
@@ -155,14 +153,10 @@ describe('deleteCategory', () => {
         updateMany: vi.fn(),
       },
     };
-    prisma.$transaction.mockImplementation((cb) =>
-      Promise.resolve(cb(tx)),
-    );
+    prisma.$transaction.mockImplementation((cb) => Promise.resolve(cb(tx)));
 
     await expect(
-      categoryService.deleteCategory(
-        '550e8400-e29b-41d4-a716-446655440000',
-      ),
+      categoryService.deleteCategory('550e8400-e29b-41d4-a716-446655440000'),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(tx.article.updateMany).not.toHaveBeenCalled();
@@ -204,15 +198,38 @@ describe('updateCategory', () => {
     prisma.category.findUnique.mockResolvedValue(null);
 
     await expect(
-      categoryService.updateCategory(
-        '550e8400-e29b-41d4-a716-446655440000',
-        {
-          name: 'Updated name',
-          description: 'Updated description',
-        },
-      ),
+      categoryService.updateCategory('550e8400-e29b-41d4-a716-446655440000', {
+        name: 'Updated name',
+        description: 'Updated description',
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
 
     expect(prisma.category.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('CategoryService legacy mode', () => {
+  it('createCategory and deleteCategory use in-memory store', () => {
+    const legacyPrisma = {} as unknown as PrismaService;
+    const svc = new CategoryService(legacyPrisma);
+
+    const c = svc.createCategory({
+      name: 'L1',
+      description: 'D1',
+    });
+    expect(c.name).toBe('L1');
+    expect(svc.getCategories() as (typeof c)[]).toHaveLength(1);
+
+    svc.deleteCategory(c.id);
+    expect((svc.getCategories() as unknown[]).length).toBe(0);
+  });
+
+  it('deleteCategory throws when id missing in legacy store', () => {
+    const legacyPrisma = {} as unknown as PrismaService;
+    const svc = new CategoryService(legacyPrisma);
+
+    expect(() =>
+      svc.deleteCategory('550e8400-e29b-41d4-a716-446655440000'),
+    ).toThrow(NotFoundException);
   });
 });

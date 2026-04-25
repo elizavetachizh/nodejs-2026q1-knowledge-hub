@@ -1,4 +1,8 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtPayload } from 'src/auth/auth.types';
@@ -12,6 +16,7 @@ vi.mock('bcrypt', () => ({
 import { UserService } from 'src/user/user.service';
 import { UsersWriteService } from 'src/user/user-credentials.service';
 import { toPrismaRole, toPublicUser } from 'src/user/utils/user.mapper';
+import { Prisma } from 'generated/prisma/client';
 
 const editorId = '550e8400-e29b-41d4-a716-446655440000';
 const adminId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -208,6 +213,68 @@ describe('deleteUser', () => {
 });
 
 describe('updateUser', () => {
+  it('throws when user not found', async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(
+      userService.updateUser(editorId, {
+        oldPassword: 'a',
+        newPassword: 'b',
+      }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('throws when old password is wrong', async () => {
+    const existing = prismaUserRow({ id: editorId });
+    prisma.user.findUnique.mockResolvedValue(existing);
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+
+    await expect(
+      userService.updateUser(editorId, {
+        oldPassword: 'wrong',
+        newPassword: 'new',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('maps Prisma unique error on password update to BadRequest', async () => {
+    const existing = prismaUserRow({ id: editorId });
+    prisma.user.findUnique.mockResolvedValue(existing);
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+    prisma.user.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('dup', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['login'] },
+      }),
+    );
+
+    await expect(
+      userService.updateUser(editorId, {
+        oldPassword: 'password1',
+        newPassword: 'password2',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rethrows unexpected errors from update', async () => {
+    const existing = prismaUserRow({ id: editorId });
+    prisma.user.findUnique.mockResolvedValue(existing);
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+    vi.mocked(bcrypt.hash).mockResolvedValue('hashed' as never);
+    prisma.user.update.mockRejectedValue(new Error('db down'));
+
+    await expect(
+      userService.updateUser(editorId, {
+        oldPassword: 'password1',
+        newPassword: 'password2',
+      }),
+    ).rejects.toThrow('db down');
+  });
+
   it('updates password after bcrypt verify and hash', async () => {
     const existing = prismaUserRow({
       id: editorId,
@@ -245,7 +312,9 @@ describe('updateUser', () => {
       },
     });
   });
+});
 
+describe('updateUserRole', () => {
   it('updates role when actor is admin', async () => {
     const existing = prismaUserRow({
       id: editorId,

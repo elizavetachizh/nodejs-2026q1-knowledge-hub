@@ -149,6 +149,49 @@ describe('AuthService', () => {
         data: { refreshTokenHash: 'new-refresh-hash' },
       });
     });
+
+    it('throws when JWT_SECRET is not configured', async () => {
+      const prev = process.env.JWT_SECRET;
+      delete process.env.JWT_SECRET;
+      vi.stubEnv('JWT_REFRESH_SECRET', 'test-refresh-secret');
+      prisma.user.findUnique.mockResolvedValue(prismaUserForAuth());
+      vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+
+      try {
+        await expect(
+          authService.login({
+            login: loginPayload.login,
+            password: 'plain',
+          }),
+        ).rejects.toThrow('JWT_SECRET is not set');
+      } finally {
+        if (prev !== undefined) process.env.JWT_SECRET = prev;
+      }
+    });
+
+    it('throws when JWT_REFRESH_SECRET is not configured', async () => {
+      const prevR = process.env.JWT_REFRESH_SECRET;
+      const prevK = process.env.JWT_SECRET_REFRESH_KEY;
+      delete process.env.JWT_REFRESH_SECRET;
+      delete process.env.JWT_SECRET_REFRESH_KEY;
+      vi.stubEnv('JWT_SECRET', 'test-access-secret');
+      prisma.user.findUnique.mockResolvedValue(prismaUserForAuth());
+      vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+
+      try {
+        await expect(
+          authService.login({
+            login: loginPayload.login,
+            password: 'plain',
+          }),
+        ).rejects.toThrow('JWT_REFRESH_SECRET is not set');
+      } finally {
+        if (prevR !== undefined) process.env.JWT_REFRESH_SECRET = prevR;
+        else delete process.env.JWT_REFRESH_SECRET;
+        if (prevK !== undefined) process.env.JWT_SECRET_REFRESH_KEY = prevK;
+        else delete process.env.JWT_SECRET_REFRESH_KEY;
+      }
+    });
   });
 
   describe('signup', () => {
