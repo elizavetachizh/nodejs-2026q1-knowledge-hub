@@ -1,8 +1,8 @@
 import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from 'src/common/errors/app-http.error';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtPayload } from 'src/auth/auth.types';
@@ -128,7 +128,7 @@ describe('getUser', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     await expect(
       userService.getUser('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -168,7 +168,7 @@ describe('createUser', () => {
 
     await expect(
       userService.createUser(dto, viewerActor),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(usersWriteMock.createUserWithPassword).not.toHaveBeenCalled();
   });
 });
@@ -207,7 +207,7 @@ describe('deleteUser', () => {
 
     await expect(
       userService.deleteUser('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
@@ -221,7 +221,7 @@ describe('updateUser', () => {
         oldPassword: 'a',
         newPassword: 'b',
       }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -235,7 +235,7 @@ describe('updateUser', () => {
         oldPassword: 'wrong',
         newPassword: 'new',
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -257,7 +257,7 @@ describe('updateUser', () => {
         oldPassword: 'password1',
         newPassword: 'password2',
       }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it('rethrows unexpected errors from update', async () => {
@@ -351,11 +351,11 @@ describe('updateUserRole', () => {
         { role: UserRole.ADMIN },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException when user missing', async () => {
+  it('throws NotFoundError when user missing', async () => {
     prisma.user.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -366,7 +366,7 @@ describe('updateUserRole', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(prisma.user.update).not.toHaveBeenCalled();
   });

@@ -1,4 +1,7 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenError,
+  UnauthorizedError,
+} from 'src/common/errors/app-http.error';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'prisma/prisma.service';
@@ -84,7 +87,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.login({ login: 'user1', password: 'password1' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
       expect(bcrypt.compare).not.toHaveBeenCalled();
     });
 
@@ -94,7 +97,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.login({ login: loginPayload.login, password: 'wrong' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('uses default bcrypt salt rounds when CRYPT_SALT is invalid', async () => {
@@ -244,10 +247,10 @@ describe('AuthService', () => {
     it('throws Unauthorized when refresh token missing', async () => {
       await expect(
         authService.refreshToken({ refreshToken: undefined }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toBeInstanceOf(UnauthorizedError);
       await expect(
         authService.refreshToken({ refreshToken: '' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toBeInstanceOf(UnauthorizedError);
     });
 
     it('throws Forbidden when verify fails', async () => {
@@ -255,7 +258,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.refreshToken({ refreshToken: 'bad.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('throws Forbidden when user missing or has no refresh hash', async () => {
@@ -264,14 +267,14 @@ describe('AuthService', () => {
 
       await expect(
         authService.refreshToken({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
 
       prisma.user.findUnique.mockResolvedValue(
         prismaUserForAuth({ refreshTokenHash: null }),
       );
       await expect(
         authService.refreshToken({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('throws Forbidden when refresh token does not match stored hash', async () => {
@@ -281,7 +284,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.refreshToken({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('returns new tokens and rotates refresh hash on success', async () => {
@@ -320,10 +323,10 @@ describe('AuthService', () => {
     it('throws Unauthorized when refresh token missing', async () => {
       await expect(
         authService.logout({ refreshToken: undefined }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toBeInstanceOf(UnauthorizedError);
       await expect(
         authService.logout({ refreshToken: '' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toBeInstanceOf(UnauthorizedError);
     });
 
     it('throws Forbidden when verify fails', async () => {
@@ -331,7 +334,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.logout({ refreshToken: 'bad.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('throws Forbidden when user missing or has no refresh hash', async () => {
@@ -340,14 +343,14 @@ describe('AuthService', () => {
 
       await expect(
         authService.logout({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
 
       prisma.user.findUnique.mockResolvedValue(
         prismaUserForAuth({ refreshTokenHash: null }),
       );
       await expect(
         authService.logout({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('throws Forbidden when token does not match hash', async () => {
@@ -357,7 +360,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.logout({ refreshToken: 'valid.jwt' }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
     it('clears refresh hash on success', async () => {

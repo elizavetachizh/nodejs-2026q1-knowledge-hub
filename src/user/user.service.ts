@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from 'src/common/errors/app-http.error';
 import { CreateUserDto, UserRole } from './dto/create-user.dto';
 import {
   UpdatePasswordDto,
@@ -52,7 +52,9 @@ export class UserService {
       return this.legacyUsers;
     }
 
-    return this.prisma.user.findMany().then((users) => users.map((user) => toPublicUser(user)));
+    return this.prisma.user
+      .findMany()
+      .then((users) => users.map((user) => toPublicUser(user)));
   }
 
   create(input: {
@@ -85,7 +87,7 @@ export class UserService {
       where: { id },
     });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundError(`User with ID ${id} not found`);
     }
     return toPublicUser(user);
   }
@@ -101,7 +103,7 @@ export class UserService {
         role: createUserDto.role,
       });
     } else {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenError('Insufficient permissions');
     }
   }
 
@@ -113,14 +115,14 @@ export class UserService {
       where: { id },
     });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundError(`User with ID ${id} not found`);
     }
     const passwordOk = await bcrypt.compare(
       updatePasswordDto.oldPassword,
       user.password,
     );
     if (!passwordOk) {
-      throw new ForbiddenException('Invalid password');
+      throw new ForbiddenError('Invalid password');
     }
 
     try {
@@ -138,7 +140,7 @@ export class UserService {
       return toPublicUser(user);
     } catch (error) {
       if (this.isPrismaUniqueConstraintError(error, 'login')) {
-        throw new BadRequestException('Login already taken');
+        throw new ValidationError('Login already taken');
       }
       throw error;
     }
@@ -153,7 +155,7 @@ export class UserService {
       where: { id },
     });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundError(`User with ID ${id} not found`);
     }
     if (actor.role === UserRole.ADMIN) {
       const updatedUser = await this.prisma.user.update({
@@ -162,7 +164,7 @@ export class UserService {
       });
       return toPublicUser(updatedUser);
     } else {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenError('Insufficient permissions');
     }
   }
 
@@ -171,7 +173,7 @@ export class UserService {
       where: { id },
     });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundError(`User with ID ${id} not found`);
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.article.updateMany({

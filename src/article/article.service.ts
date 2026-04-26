@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from 'src/common/errors/app-http.error';
 import { Article } from './article.types';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -46,7 +46,7 @@ export class ArticleService {
       [ArticleStatus.ARCHIVED]: [],
     };
     if (!allowed[current].includes(next)) {
-      throw new BadRequestException(
+      throw new ValidationError(
         `Invalid status transition: ${current} → ${next}`,
       );
     }
@@ -71,17 +71,17 @@ export class ArticleService {
     if (actor.role === UserRole.ADMIN) return;
     if (actor.role === UserRole.EDITOR) {
       if (!authorId) {
-        throw new ForbiddenException(
+        throw new ForbiddenError(
           'Editor can not modify article without author',
         );
       }
       if (authorId !== actor.userId) {
-        throw new ForbiddenException('Editor can modify only own articles');
+        throw new ForbiddenError('Editor can modify only own articles');
       }
       return;
     }
 
-    throw new ForbiddenException('Insufficient permissions');
+    throw new ForbiddenError('Insufficient permissions');
   }
   async getArticles(
     status?: ArticleStatus,
@@ -108,7 +108,7 @@ export class ArticleService {
         tags: true,
       },
     });
-    if (!row) throw new NotFoundException(`Article with id ${id} not found`);
+    if (!row) throw new NotFoundError(`Article with id ${id} not found`);
 
     return toArticleDto(row);
   }
@@ -132,7 +132,7 @@ export class ArticleService {
     } else if (actor.role === UserRole.EDITOR) {
       finalAuthorId = actor.userId;
     } else {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenError('Insufficient permissions');
     }
     this.assertEditorOwnsArticle(actor, finalAuthorId);
 
@@ -168,8 +168,7 @@ export class ArticleService {
     const article = await this.prisma.article.findUnique({
       where: { id },
     });
-    if (!article)
-      throw new NotFoundException(`Article with id ${id} not found`);
+    if (!article) throw new NotFoundError(`Article with id ${id} not found`);
 
     this.assertEditorOwnsArticle(actor, article.authorId);
 
@@ -185,7 +184,7 @@ export class ArticleService {
       updateArticleDto.authorId &&
       updateArticleDto.authorId !== actor.userId
     ) {
-      throw new ForbiddenException('Insufficient permissions');
+      throw new ForbiddenError('Insufficient permissions');
     }
     let finalAuthorId: string | null = null;
     if (actor.role === UserRole.ADMIN) {
@@ -233,7 +232,7 @@ export class ArticleService {
       where: { id },
     });
     if (!article) {
-      throw new NotFoundException(`Article with id ${id} not found`);
+      throw new NotFoundError(`Article with id ${id} not found`);
     }
     this.assertEditorOwnsArticle(actor, article.authorId);
     await this.prisma.article.delete({

@@ -4,7 +4,11 @@ import { sanitizeForLog } from '../../sanitize-for-log';
 describe('sanitizeForLog', () => {
   it('redacts password fields', () => {
     expect(
-      sanitizeForLog({ login: 'a', password: 'secret', nested: { Password: 'x' } }),
+      sanitizeForLog({
+        login: 'a',
+        password: 'secret',
+        nested: { Password: 'x' },
+      }),
     ).toEqual({
       login: 'a',
       password: '[REDACTED]',
@@ -33,6 +37,9 @@ describe('sanitizeForLog', () => {
   });
 
   it('leaves non-sensitive data intact', () => {
-    expect(sanitizeForLog({ id: 1, title: 'Hi' })).toEqual({ id: 1, title: 'Hi' });
+    expect(sanitizeForLog({ id: 1, title: 'Hi' })).toEqual({
+      id: 1,
+      title: 'Hi',
+    });
   });
 });

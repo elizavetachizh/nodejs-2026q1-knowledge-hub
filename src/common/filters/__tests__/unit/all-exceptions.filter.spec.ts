@@ -28,7 +28,10 @@ function mockHost(req: { method: string; url: string }) {
 }
 
 describe('AllExceptionsFilter', () => {
-  let logger: { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let logger: {
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
   let filter: AllExceptionsFilter;
 
   beforeEach(() => {
@@ -56,6 +59,20 @@ describe('AllExceptionsFilter', () => {
         statusCode: code,
         error: phrase,
         message: msg,
+      });
+    });
+
+    it('merges ValidationError.extras into JSON body', () => {
+      const { host, res } = mockHost({ method: 'POST', url: '/signup' });
+      filter.catch(
+        new ValidationError('Login already taken', { id: 'user-1' }),
+        host as never,
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Login already taken',
+        id: 'user-1',
       });
     });
   });
@@ -144,7 +161,7 @@ describe('AllExceptionsFilter', () => {
     });
 
     it('handles Error without stack', () => {
-      const { host, res } = mockHost({ method: 'DELETE', url: '/d' });
+      const { host } = mockHost({ method: 'DELETE', url: '/d' });
       const err = new Error('x');
       delete err.stack;
 

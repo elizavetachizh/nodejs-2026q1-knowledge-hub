@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -24,6 +23,7 @@ import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { sortData } from 'src/common/utils/sort';
 import { PublicUser } from './user.types';
 import { AuthRequest } from 'src/auth/auth.types';
+import { ValidationError } from 'src/common/errors/app-http.error';
 
 @ApiTags('User')
 @ApiBearerAuth('bearer')
@@ -109,7 +109,7 @@ export class UserController {
       typeof body.oldPassword !== 'string' ||
       typeof body.newPassword !== 'string'
     ) {
-      throw new BadRequestException(
+      throw new ValidationError(
         'oldPassword and newPassword are required for password update',
       );
     }

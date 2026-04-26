@@ -1,8 +1,8 @@
 import {
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from 'src/common/errors/app-http.error';
 import { PrismaService } from 'prisma/prisma.service';
 import { ArticleService } from 'src/article/article.service';
 import { JwtPayload } from 'src/auth/auth.types';
@@ -140,7 +140,7 @@ describe('getArticle', () => {
     prisma.article.findUnique.mockResolvedValue(null);
     await expect(
       articleService.getArticle('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -234,7 +234,7 @@ describe('createArticle', () => {
     };
 
     expect(() => articleService.createArticle(dto, viewer)).toThrow(
-      ForbiddenException,
+      ForbiddenError,
     );
     expect(prisma.article.create).not.toHaveBeenCalled();
   });
@@ -268,7 +268,7 @@ describe('createArticle', () => {
 });
 
 describe('deleteArticle', () => {
-  it('throws ForbiddenException when user is viewer', async () => {
+  it('throws ForbiddenError when user is viewer', async () => {
     const row = prismaArticleRow({});
     prisma.article.findUnique.mockResolvedValue(row);
 
@@ -280,7 +280,7 @@ describe('deleteArticle', () => {
 
     await expect(
       articleService.deleteArticle(row.id, viewer),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.article.delete).not.toHaveBeenCalled();
   });
 
@@ -302,7 +302,7 @@ describe('deleteArticle', () => {
         '550e8400-e29b-41d4-a716-446655440000',
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(prisma.article.delete).not.toHaveBeenCalled();
   });
 });
@@ -370,11 +370,11 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
 
-  it('throws NotFoundException when article missing', async () => {
+  it('throws NotFoundError when article missing', async () => {
     prisma.article.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -389,7 +389,7 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
@@ -475,7 +475,7 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationError);
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
@@ -501,7 +501,7 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationError);
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
@@ -527,7 +527,7 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    ).rejects.toBeInstanceOf(ValidationError);
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
@@ -551,7 +551,7 @@ describe('updateArticle', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
 

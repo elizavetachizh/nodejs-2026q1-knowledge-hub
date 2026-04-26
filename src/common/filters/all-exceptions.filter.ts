@@ -29,6 +29,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         statusCode: status,
         error: getReasonPhrase(status),
         message: exception.message,
+        ...(exception.extras ?? {}),
       });
       return;
     }

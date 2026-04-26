@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { ValidationError } from 'src/common/errors/app-http.error';
 import { describe, it, expect } from 'vitest';
 import { sortData } from 'src/common/utils/sort';
 
@@ -29,14 +29,14 @@ describe('sortData', () => {
 
   it('throws when sortBy is not allowed', () => {
     expect(() => sortData(rows, 'oops', 'asc', ['title'])).toThrow(
-      BadRequestException,
+      ValidationError,
     );
   });
 
   it('throws when order is invalid', () => {
     expect(() =>
       sortData(rows, 'title', 'oops' as unknown as 'asc', ['title']),
-    ).toThrow(BadRequestException);
+    ).toThrow(ValidationError);
   });
 
   it('handles null field values', () => {

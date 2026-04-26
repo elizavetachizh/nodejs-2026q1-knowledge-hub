@@ -1,8 +1,8 @@
+import { Injectable } from '@nestjs/common';
 import {
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+  ForbiddenError,
+  UnauthorizedError,
+} from 'src/common/errors/app-http.error';
 import { PrismaService } from 'prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
@@ -89,12 +89,12 @@ export class AuthService {
       where: { login: loginDto.login },
     });
     if (!user) {
-      throw new ForbiddenException('Authentication failed');
+      throw new ForbiddenError('Authentication failed');
     }
 
     const passwordOk = await bcrypt.compare(loginDto.password, user.password);
     if (!passwordOk) {
-      throw new ForbiddenException('Authentication failed');
+      throw new ForbiddenError('Authentication failed');
     }
     const payload: JwtPayload = {
       userId: user.id,
@@ -119,7 +119,7 @@ export class AuthService {
     refreshTokenDto: RefreshDto,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     if (!refreshTokenDto.refreshToken) {
-      throw new UnauthorizedException('No refresh token provided');
+      throw new UnauthorizedError('No refresh token provided');
     }
     let payload: JwtPayload;
 
@@ -131,20 +131,20 @@ export class AuthService {
         },
       );
     } catch {
-      throw new ForbiddenException('Invalid refresh token');
+      throw new ForbiddenError('Invalid refresh token');
     }
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.userId },
     });
     if (!user || !user.refreshTokenHash) {
-      throw new ForbiddenException('Invalid refresh token');
+      throw new ForbiddenError('Invalid refresh token');
     }
     const rtMatches = await bcrypt.compare(
       refreshTokenDto.refreshToken,
       user.refreshTokenHash,
     );
-    if (!rtMatches) throw new ForbiddenException('Invalid refresh token');
+    if (!rtMatches) throw new ForbiddenError('Invalid refresh token');
     const newPayload: JwtPayload = {
       userId: user.id,
       role: fromPrismaRole(user.role),
@@ -156,7 +156,7 @@ export class AuthService {
   }
   async logout(logoutDto: LogoutDto): Promise<{ message: string }> {
     if (!logoutDto.refreshToken) {
-      throw new UnauthorizedException('No refresh token provided');
+      throw new UnauthorizedError('No refresh token provided');
     }
     let payload: JwtPayload;
     try {
@@ -164,20 +164,20 @@ export class AuthService {
         secret: this.getRefreshSecret(),
       });
     } catch {
-      throw new ForbiddenException('Invalid refresh token');
+      throw new ForbiddenError('Invalid refresh token');
     }
     const user = await this.prisma.user.findUnique({
       where: { id: payload.userId },
     });
     if (!user || !user.refreshTokenHash) {
-      throw new ForbiddenException('Invalid refresh token');
+      throw new ForbiddenError('Invalid refresh token');
     }
     const rtMatches = await bcrypt.compare(
       logoutDto.refreshToken,
       user.refreshTokenHash,
     );
     if (!rtMatches) {
-      throw new ForbiddenException('Invalid refresh token');
+      throw new ForbiddenError('Invalid refresh token');
     }
     await this.prisma.user.update({
       where: { id: user.id },

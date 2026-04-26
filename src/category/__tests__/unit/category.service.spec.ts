@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundError } from 'src/common/errors/app-http.error';
 import { PrismaService } from 'prisma/prisma.service';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CategoryService } from 'src/category/category.service';
@@ -82,7 +82,7 @@ describe('getCategory', () => {
     prisma.category.findUnique.mockResolvedValue(null);
     await expect(
       categoryService.getCategory('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -157,7 +157,7 @@ describe('deleteCategory', () => {
 
     await expect(
       categoryService.deleteCategory('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(tx.article.updateMany).not.toHaveBeenCalled();
     expect(tx.category.delete).not.toHaveBeenCalled();
@@ -194,7 +194,7 @@ describe('updateCategory', () => {
     });
   });
 
-  it('throws NotFoundException when category missing', async () => {
+  it('throws NotFoundError when category missing', async () => {
     prisma.category.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -202,7 +202,7 @@ describe('updateCategory', () => {
         name: 'Updated name',
         description: 'Updated description',
       }),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(prisma.category.update).not.toHaveBeenCalled();
   });
@@ -230,6 +230,6 @@ describe('CategoryService legacy mode', () => {
 
     expect(() =>
       svc.deleteCategory('550e8400-e29b-41d4-a716-446655440000'),
-    ).toThrow(NotFoundException);
+    ).toThrow(NotFoundError);
   });
 });

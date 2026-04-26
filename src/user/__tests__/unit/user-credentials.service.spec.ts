@@ -1,4 +1,3 @@
-import { BadRequestException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'prisma/prisma.service';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -7,6 +6,7 @@ import { UserRole } from 'src/user/dto/create-user.dto';
 import { Prisma } from 'generated/prisma/client';
 import { UserRole as PrismaUserRole } from 'generated/prisma/enums';
 import { toPrismaRole, toPublicUser } from 'src/user/utils/user.mapper';
+import { ValidationError } from 'src/common/errors/app-http.error';
 
 vi.mock('bcrypt', () => ({
   compare: vi.fn(),
@@ -52,7 +52,7 @@ describe('UsersWriteService', () => {
           password: 'secret',
           role: UserRole.VIEWER,
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toBeInstanceOf(ValidationError);
       await expect(
         service.createUserWithPassword({
           login: '',
@@ -70,7 +70,7 @@ describe('UsersWriteService', () => {
           password: '',
           role: UserRole.VIEWER,
         }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toBeInstanceOf(ValidationError);
       expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
@@ -86,13 +86,11 @@ describe('UsersWriteService', () => {
           password: 'secret',
           role: UserRole.EDITOR,
         });
-        throw new Error('expected BadRequestException');
+        throw new Error('expected ValidationError');
       } catch (e) {
-        expect(e).toBeInstanceOf(BadRequestException);
-        expect((e as BadRequestException).getResponse()).toEqual({
-          message: 'Login already taken',
-          id: 'existing-id',
-        });
+        expect(e).toBeInstanceOf(ValidationError);
+        expect((e as ValidationError).message).toBe('Login already taken');
+        expect((e as ValidationError).extras).toEqual({ id: 'existing-id' });
       }
 
       expect(bcrypt.hash).not.toHaveBeenCalled();
@@ -126,7 +124,7 @@ describe('UsersWriteService', () => {
       expect(result).toEqual(toPublicUser(created));
     });
 
-    it('maps duplicate login on create (P2002) to BadRequest', async () => {
+    it('maps duplicate login on create (P2002) to ValidationError', async () => {
       prisma.user.findUnique
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ id: 'race-dup-id', login: 'bob' });
@@ -146,13 +144,11 @@ describe('UsersWriteService', () => {
           password: 'secret',
           role: UserRole.VIEWER,
         });
-        throw new Error('expected BadRequestException');
+        throw new Error('expected ValidationError');
       } catch (e) {
-        expect(e).toBeInstanceOf(BadRequestException);
-        expect((e as BadRequestException).getResponse()).toEqual({
-          message: 'Login already taken',
-          id: 'race-dup-id',
-        });
+        expect(e).toBeInstanceOf(ValidationError);
+        expect((e as ValidationError).message).toBe('Login already taken');
+        expect((e as ValidationError).extras).toEqual({ id: 'race-dup-id' });
       }
 
       expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);

@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { ValidationError } from 'src/common/errors/app-http.error';
 
 export function sortData<T extends object>(
   data: T[],
@@ -10,9 +10,9 @@ export function sortData<T extends object>(
     return data;
   }
   if (!allowedFields.includes(sortBy))
-    throw new BadRequestException('Invalid sortBy');
+    throw new ValidationError('Invalid sortBy');
   if (sortBy && !['asc', 'desc'].includes(order)) {
-    throw new BadRequestException('Invalid order value');
+    throw new ValidationError('Invalid order value');
   }
   const direction = order === 'asc' ? 1 : -1;
   const copy = [...data];
