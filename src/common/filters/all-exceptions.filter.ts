@@ -44,11 +44,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         'ExceptionFilter',
       );
 
-      res.status(status).json(
-        typeof body === 'object' && body !== null
-          ? body
-          : { statusCode: status, message: String(body) },
-      );
+      res
+        .status(status)
+        .json(
+          typeof body === 'object' && body !== null
+            ? body
+            : { statusCode: status, message: String(body) },
+        );
       return;
     }
 

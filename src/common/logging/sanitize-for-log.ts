@@ -6,8 +6,7 @@ function isSensitiveKey(key: string): boolean {
   if (k.includes('password')) return true;
   if (k.includes('token')) return true;
   if (k.includes('secret')) return true;
-  if (k === 'cookie' || k === 'set-cookie') return true;
-  return false;
+  return k === 'cookie' || k === 'set-cookie';
 }
 
 /**
@@ -16,7 +15,11 @@ function isSensitiveKey(key: string): boolean {
 export function sanitizeForLog<T>(value: T): T {
   if (value === null || value === undefined) return value;
 
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
     return value;
   }
 

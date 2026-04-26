@@ -34,8 +34,7 @@ export function registerProcessErrorHandlers(
   });
 
   process.on('unhandledRejection', (reason: unknown) => {
-    const err =
-      reason instanceof Error ? reason : new Error(String(reason));
+    const err = reason instanceof Error ? reason : new Error(String(reason));
     void shutdown('unhandledRejection', err);
   });
 }

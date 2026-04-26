@@ -29,7 +29,9 @@ export class AppLoggingService implements LoggerService {
     this.logFilePath = process.env.LOG_FILE || path.join(dir, 'app.log');
     const kb = Number(process.env.LOG_MAX_FILE_SIZE ?? DEFAULT_MAX_KB);
     this.maxBytes =
-      Number.isFinite(kb) && kb > 0 ? Math.floor(kb) * 1024 : DEFAULT_MAX_KB * 1024;
+      Number.isFinite(kb) && kb > 0
+        ? Math.floor(kb) * 1024
+        : DEFAULT_MAX_KB * 1024;
 
     fs.mkdirSync(path.dirname(this.logFilePath), { recursive: true });
   }
@@ -58,9 +60,7 @@ export class AppLoggingService implements LoggerService {
           context: context ?? undefined,
           extra:
             rest.length > 0
-              ? rest.map((x) =>
-                  typeof x === 'object' ? x : String(x),
-                )
+              ? rest.map((x) => (typeof x === 'object' ? x : String(x)))
               : undefined,
         }) + '\n'
       );
@@ -82,7 +82,10 @@ export class AppLoggingService implements LoggerService {
       if (size < this.maxBytes) return;
 
       const dir = path.dirname(this.logFilePath);
-      const base = path.basename(this.logFilePath, path.extname(this.logFilePath));
+      const base = path.basename(
+        this.logFilePath,
+        path.extname(this.logFilePath),
+      );
       const ext = path.extname(this.logFilePath) || '.log';
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const rotated = path.join(dir, `${base}-${stamp}${ext}`);
