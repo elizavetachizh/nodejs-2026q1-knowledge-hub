@@ -50,7 +50,6 @@ async function bootstrap() {
       },
       'bearer',
     )
-    .addSecurityRequirements('bearer')
     .addTag('knowledge-hub')
     .addTag('Article', 'Operations with articles: create, read, update, delete')
     .addTag('User', 'Operations with users and roles')

@@ -158,6 +158,26 @@ describe('UsersWriteService', () => {
       expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
     });
 
+    it('rethrows when P2002 meta.target is not an array (not treated as login duplicate)', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      vi.mocked(bcrypt.hash).mockResolvedValue('hash' as never);
+      prisma.user.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique', {
+          code: 'P2002',
+          clientVersion: 'test',
+          meta: { target: 'login' },
+        }),
+      );
+
+      await expect(
+        service.createUserWithPassword({
+          login: 'dave',
+          password: 'secret',
+          role: UserRole.VIEWER,
+        }),
+      ).rejects.toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    });
+
     it('rethrows non-unique errors from create', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       vi.mocked(bcrypt.hash).mockResolvedValue('hash' as never);

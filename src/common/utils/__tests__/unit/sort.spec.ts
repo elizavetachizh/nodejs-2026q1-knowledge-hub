@@ -44,4 +44,13 @@ describe('sortData', () => {
     const out = sortData(withNull, 'k', 'asc', ['k']);
     expect(out[0].k).toBe('a');
   });
+
+  it('treats two null keys as equal', () => {
+    const rows = [
+      { k: null as unknown as string },
+      { k: null as unknown as string },
+    ];
+    const out = sortData(rows, 'k', 'asc', ['k']);
+    expect(out).toHaveLength(2);
+  });
 });

@@ -186,6 +186,19 @@ describe('AccessGuard', () => {
       expect(guard.canActivate(context)).toBe(true);
     });
 
+    it('denies editor PATCH /article (only POST/PUT/DELETE allowed for mutations)', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.EDITOR,
+      });
+      const { context } = createContext({
+        path: '/article/550e8400-e29b-41d4-a716-446655440000',
+        method: 'PATCH',
+        authorization: 'Bearer t',
+      });
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    });
+
     it('denies editor mutating /category', () => {
       jwtService.verify.mockReturnValue({
         ...validPayload,

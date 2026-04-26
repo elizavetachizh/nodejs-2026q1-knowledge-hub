@@ -11,7 +11,7 @@ import {
   Req,
   Put,
 } from '@nestjs/common';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
@@ -21,6 +21,7 @@ import { AuthRequest } from '../auth/auth.types';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @ApiTags('Comment')
+@ApiBearerAuth('bearer')
 @Controller('comment')
 export class CommentController {
   constructor(private readonly commentService: CommentService) {}
@@ -109,7 +110,11 @@ export class CommentController {
     @Body() updateCommentDto: UpdateCommentDto,
     @Req() request: AuthRequest,
   ): Promise<Comment> {
-    return this.commentService.updateComment(id, updateCommentDto, request.user);
+    return this.commentService.updateComment(
+      id,
+      updateCommentDto,
+      request.user,
+    );
   }
 
   @Delete(':id')

@@ -20,12 +20,13 @@ import {
   UpdateUserRoleDto,
 } from './dto/update-password.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { sortData } from 'src/common/utils/sort';
 import { PublicUser } from './user.types';
 import { AuthRequest } from 'src/auth/auth.types';
 
 @ApiTags('User')
+@ApiBearerAuth('bearer')
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}

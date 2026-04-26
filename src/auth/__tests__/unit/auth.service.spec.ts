@@ -97,6 +97,24 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('uses default bcrypt salt rounds when CRYPT_SALT is invalid', async () => {
+      vi.stubEnv('CRYPT_SALT', 'not-a-number');
+      prisma.user.findUnique.mockResolvedValue(prismaUserForAuth());
+      vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+      jwtService.signAsync
+        .mockResolvedValueOnce('access-token')
+        .mockResolvedValueOnce('refresh-token');
+      vi.mocked(bcrypt.hash).mockResolvedValue('new-refresh-hash' as never);
+      prisma.user.update.mockResolvedValue({} as never);
+
+      await authService.login({
+        login: loginPayload.login,
+        password: 'plain',
+      });
+
+      expect(bcrypt.hash).toHaveBeenCalledWith('refresh-token', 10);
+    });
+
     it('returns tokens and saves refresh hash on success', async () => {
       prisma.user.findUnique.mockResolvedValue(prismaUserForAuth());
       vi.mocked(bcrypt.compare).mockResolvedValue(true as never);

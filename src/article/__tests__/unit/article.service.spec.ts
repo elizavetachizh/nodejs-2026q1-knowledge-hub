@@ -531,4 +531,59 @@ describe('updateArticle', () => {
 
     expect(prisma.article.update).not.toHaveBeenCalled();
   });
+
+  it('forbids editor updating article without author', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: null,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+
+    await expect(
+      articleService.updateArticle(
+        existing.id,
+        {
+          title: 't',
+          content: 'c',
+          authorId: editorId,
+          categoryId,
+          tags: ['x'],
+        },
+        editorActor,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.article.update).not.toHaveBeenCalled();
+  });
+
+  it('admin update passes authorId from dto', async () => {
+    const existing = prismaArticleRow({
+      id: 'article-1',
+      authorId: editorId,
+    });
+    prisma.article.findUnique.mockResolvedValue(existing);
+    prisma.article.update.mockResolvedValue(
+      prismaArticleRow({
+        ...existing,
+        authorId: otherAuthorId,
+      }),
+    );
+
+    await articleService.updateArticle(
+      existing.id,
+      {
+        title: 't',
+        content: 'c',
+        authorId: otherAuthorId,
+        categoryId,
+        tags: ['z'],
+      },
+      adminActor,
+    );
+
+    expect(prisma.article.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ authorId: otherAuthorId }),
+      }),
+    );
+  });
 });
