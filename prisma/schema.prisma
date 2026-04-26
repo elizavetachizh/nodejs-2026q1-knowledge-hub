@@ -25,14 +25,15 @@ datasource db {
 }
 
 model User {
-  id         String   @id @default(uuid())
-  login      String   
-  password   String
-  role       UserRole @default(VIEWER)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  articles   Article[]
-  comments   Comment[]
+  id               String   @id @default(uuid())
+  login            String   @unique
+  password         String   
+  role             UserRole @default(VIEWER)
+  refreshTokenHash String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  articles         Article[]
+  comments         Comment[]
 }
 
 model Article {

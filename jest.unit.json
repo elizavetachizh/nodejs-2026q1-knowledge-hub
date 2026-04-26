@@ -3,6 +3,11 @@
   "rootDir": ".",
   "testMatch": ["<rootDir>/src/**/*.spec.ts"],
   "testEnvironment": "node",
+  "moduleNameMapper": {
+    "^src/(.*)$": "<rootDir>/src/$1",
+    "^prisma/(.*)$": "<rootDir>/prisma/$1",
+    "^generated/(.*)$": "<rootDir>/generated/$1"
+  },
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -6,17 +7,23 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdatePasswordDto } from './dto/update-password.dto';
+import {
+  UpdatePasswordDto,
+  UpdateUserRoleDto,
+} from './dto/update-password.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { sortData } from 'src/common/utils/sort';
 import { PublicUser } from './user.types';
+import { AuthRequest } from 'src/auth/auth.types';
 
 @ApiTags('User')
 @Controller('user')
@@ -82,15 +89,38 @@ export class UserController {
   }
 
   @Post()
-  async createUser(@Body() createUserDto: CreateUserDto) {
-    return this.userService.createUser(createUserDto);
+  async createUser(
+    @Req() request: AuthRequest,
+    @Body() createUserDto: CreateUserDto,
+  ) {
+    return this.userService.createUser(createUserDto, request.user);
   }
   @Put(':id')
   async updateUser(
+    @Req() request: AuthRequest,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updatePasswordDto: UpdatePasswordDto,
+    @Body() body: UpdatePasswordDto | UpdateUserRoleDto,
   ): Promise<PublicUser> {
-    return this.userService.updateUser(id, updatePasswordDto);
+    if ('role' in body) {
+      return this.userService.updateUserRole(id, body, request.user);
+    }
+    if (
+      typeof body.oldPassword !== 'string' ||
+      typeof body.newPassword !== 'string'
+    ) {
+      throw new BadRequestException(
+        'oldPassword and newPassword are required for password update',
+      );
+    }
+    return this.userService.updateUser(id, body);
+  }
+  @Patch(':id')
+  async updateUserRole(
+    @Req() request: AuthRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateUserRoleDto: UpdateUserRoleDto,
+  ): Promise<PublicUser> {
+    return this.userService.updateUserRole(id, updateUserRoleDto, request.user);
   }
   @Delete(':id')
   @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)

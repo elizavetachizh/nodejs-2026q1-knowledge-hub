@@ -11,7 +11,7 @@ const port = process.env.PORT || 4000;
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(loggingMiddleware);
-  app.useGlobalGuards(new AccessGuard());
+  app.useGlobalGuards(app.get(AccessGuard));
   // Global use of ValidationPipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,6 +27,16 @@ async function bootstrap() {
       'Knowledge hub service for managing articles, categories, and comments',
     )
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Paste access token as: Bearer <token>',
+      },
+      'bearer',
+    )
+    .addSecurityRequirements('bearer')
     .addTag('knowledge-hub')
     .addTag('Article', 'Operations with articles: create, read, update, delete')
     .addTag('User', 'Operations with users and roles')

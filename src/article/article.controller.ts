@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Post,
   Put,
+  Req,
 } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ArticleService } from './article.service';
@@ -17,7 +18,8 @@ import { UpdateArticleDto } from './dto/update-article.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
 import { sortData } from 'src/common/utils/sort';
 import { Article } from './article.types';
-
+import { JwtPayload } from 'src/auth/auth.types';
+type AuthRequest = { user: JwtPayload };
 @ApiTags('Article')
 @Controller('article')
 export class ArticleController {
@@ -120,21 +122,30 @@ export class ArticleController {
   @Post()
   async createArticle(
     @Body() createArticleDto: CreateArticleDto,
+    @Req() request: AuthRequest,
   ): Promise<Article> {
-    return this.articleService.createArticle(createArticleDto);
+    return this.articleService.createArticle(createArticleDto, request.user);
   }
 
   @Put(':id')
   async updateArticle(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateArticleDto: UpdateArticleDto,
+    @Req() request: AuthRequest,
   ): Promise<Article> {
-    return this.articleService.updateArticle(id, updateArticleDto);
+    return this.articleService.updateArticle(
+      id,
+      updateArticleDto,
+      request.user,
+    );
   }
 
   @Delete(':id')
   @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)
-  async deleteArticle(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.articleService.deleteArticle(id);
+  async deleteArticle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: AuthRequest,
+  ): Promise<void> {
+    await this.articleService.deleteArticle(id, request.user);
   }
 }

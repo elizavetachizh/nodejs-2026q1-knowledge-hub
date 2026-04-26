@@ -8,6 +8,8 @@ import {
   HttpCode,
   Delete,
   Query,
+  Req,
+  Put,
 } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CommentService } from './comment.service';
@@ -15,6 +17,8 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { PageDto } from 'src/common/dto/page-query.dto';
 import { sortData } from 'src/common/utils/sort';
 import { Comment } from './comment.types';
+import { AuthRequest } from '../auth/auth.types';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @ApiTags('Comment')
 @Controller('comment')
@@ -93,13 +97,27 @@ export class CommentController {
   }
 
   @Post()
-  async createComment(@Body() createCommentDto: CreateCommentDto) {
-    return this.commentService.createComment(createCommentDto);
+  async createComment(
+    @Req() request: AuthRequest,
+    @Body() createCommentDto: CreateCommentDto,
+  ) {
+    return this.commentService.createComment(createCommentDto, request.user);
+  }
+  @Put(':id')
+  async updateComment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateCommentDto: UpdateCommentDto,
+    @Req() request: AuthRequest,
+  ): Promise<Comment> {
+    return this.commentService.updateComment(id, updateCommentDto, request.user);
   }
 
   @Delete(':id')
   @HttpCode(204)
-  async deleteComment(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.commentService.deleteComment(id);
+  async deleteComment(
+    @Req() request: AuthRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.commentService.deleteComment(id, request.user);
   }
 }

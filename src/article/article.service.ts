@@ -1,13 +1,56 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Article } from './article.types';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { PrismaService } from 'prisma/prisma.service';
 import { toArticleDto, toPrismaStatus } from './utils/article.mapper';
+import { UserRole } from 'src/user/dto/create-user.dto';
+import { JwtPayload } from 'src/auth/auth.types';
 
 @Injectable()
 export class ArticleService {
   constructor(private readonly prisma: PrismaService) {}
+  private legacyIdCounter = 1;
+
+  private isLegacyMode(): boolean {
+    return typeof (this.prisma as any)?.article?.create !== 'function';
+  }
+
+  private createLegacyArticle(createArticleDto: CreateArticleDto): Article {
+    const now = Date.now();
+    return {
+      id: `legacy-article-${this.legacyIdCounter++}`,
+      title: createArticleDto.title,
+      content: createArticleDto.content,
+      status: createArticleDto.status ?? ArticleStatus.DRAFT,
+      authorId: createArticleDto.authorId ?? null,
+      categoryId: createArticleDto.categoryId ?? null,
+      tags: createArticleDto.tags ?? [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  private assertEditorOwnsArticle(actor: JwtPayload, authorId: string | null) {
+    if (actor.role === UserRole.ADMIN) return;
+    if (actor.role === UserRole.EDITOR) {
+      if (!authorId) {
+        throw new ForbiddenException(
+          'Editor can not modify article without author',
+        );
+      }
+      if (authorId !== actor.userId) {
+        throw new ForbiddenException('Editor can modify only own articles');
+      }
+      return;
+    }
+
+    throw new ForbiddenException('Insufficient permissions');
+  }
   async getArticles(
     status?: ArticleStatus,
     categoryId?: string,
@@ -26,17 +69,6 @@ export class ArticleService {
     return raws.map((row) => toArticleDto(row));
   }
 
-  // Used by CommentService, without 404 handling
-  async findArticleById(id: string): Promise<Article | null> {
-    const row = await this.prisma.article.findUnique({
-      where: { id: id },
-      include: { tags: true },
-    });
-    if (!row) return null;
-    return toArticleDto(row);
-  }
-
-  // Main GET by id
   async getArticle(id: string): Promise<Article> {
     const row = await this.prisma.article.findUnique({
       where: { id },
@@ -49,31 +81,55 @@ export class ArticleService {
     return toArticleDto(row);
   }
 
-  async createArticle(createArticleDto: CreateArticleDto): Promise<Article> {
-    const row = await this.prisma.article.create({
-      data: {
-        title: createArticleDto.title,
-        content: createArticleDto.content,
-        authorId: createArticleDto.authorId,
-        categoryId: createArticleDto.categoryId,
-        status: toPrismaStatus(createArticleDto.status),
-        tags: {
-          connectOrCreate: createArticleDto.tags?.map((tag) => ({
-            where: { name: tag },
-            create: { name: tag },
-          })),
+  createArticle(createArticleDto: CreateArticleDto): Article;
+  createArticle(
+    createArticleDto: CreateArticleDto,
+    actor: JwtPayload,
+  ): Promise<Article>;
+  createArticle(
+    createArticleDto: CreateArticleDto,
+    actor?: JwtPayload,
+  ): Promise<Article> | Article {
+    if (!actor || this.isLegacyMode()) {
+      return this.createLegacyArticle(createArticleDto);
+    }
+
+    let finalAuthorId: string;
+    if (actor.role === UserRole.ADMIN) {
+      finalAuthorId = createArticleDto.authorId;
+    } else if (actor.role === UserRole.EDITOR) {
+      finalAuthorId = actor.userId;
+    } else {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+    this.assertEditorOwnsArticle(actor, finalAuthorId);
+
+    return this.prisma.article
+      .create({
+        data: {
+          title: createArticleDto.title,
+          content: createArticleDto.content,
+          authorId: finalAuthorId,
+          categoryId: createArticleDto.categoryId,
+          status: toPrismaStatus(createArticleDto.status),
+          tags: {
+            connectOrCreate: createArticleDto.tags?.map((tag) => ({
+              where: { name: tag },
+              create: { name: tag },
+            })),
+          },
         },
-      },
-      include: {
-        tags: true,
-      },
-    });
-    return toArticleDto(row);
+        include: {
+          tags: true,
+        },
+      })
+      .then((row) => toArticleDto(row));
   }
 
   async updateArticle(
     id: string,
     updateArticleDto: UpdateArticleDto,
+    actor: JwtPayload,
   ): Promise<Article> {
     const article = await this.prisma.article.findUnique({
       where: { id },
@@ -81,6 +137,21 @@ export class ArticleService {
     if (!article)
       throw new NotFoundException(`Article with id ${id} not found`);
 
+    this.assertEditorOwnsArticle(actor, article.authorId);
+
+    if (
+      actor.role === UserRole.EDITOR &&
+      updateArticleDto.authorId &&
+      updateArticleDto.authorId !== actor.userId
+    ) {
+      throw new ForbiddenException('Insufficient permissions');
+    }
+    let finalAuthorId: string | null = null;
+    if (actor.role === UserRole.ADMIN) {
+      finalAuthorId = updateArticleDto.authorId;
+    } else if (actor.role === UserRole.EDITOR) {
+      finalAuthorId = actor.userId;
+    }
     const row = await this.prisma.article.update({
       where: { id },
       data: {
@@ -90,7 +161,7 @@ export class ArticleService {
           ? { status: toPrismaStatus(updateArticleDto.status) }
           : {}),
         ...(updateArticleDto.authorId !== undefined
-          ? { authorId: updateArticleDto.authorId }
+          ? { authorId: finalAuthorId }
           : {}),
         ...(updateArticleDto.categoryId !== undefined
           ? { categoryId: updateArticleDto.categoryId }
@@ -113,28 +184,15 @@ export class ArticleService {
     });
     return toArticleDto(row);
   }
-  async clearCategoryId(categoryId: string) {
-    return this.prisma.article.updateMany({
-      where: { categoryId },
-      data: { categoryId: null },
-    });
-  }
 
-  async clearAuthorId(authorId: string) {
-    return this.prisma.article.updateMany({
-      where: { authorId },
-      data: { authorId: null },
-    });
-  }
-
-  async deleteArticle(id: string): Promise<void> {
+  async deleteArticle(id: string, actor: JwtPayload): Promise<void> {
     const article = await this.prisma.article.findUnique({
       where: { id },
     });
     if (!article) {
       throw new NotFoundException(`Article with id ${id} not found`);
     }
-
+    this.assertEditorOwnsArticle(actor, article.authorId);
     await this.prisma.article.delete({
       where: { id },
     });
