@@ -19,6 +19,9 @@ COPY --from=build /app/package*.json ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 
+# AppLoggingService creates LOG_DIR (default ./logs); non-root must own /app
+RUN mkdir -p /app/logs && chown -R node:node /app
+
 # Switch to non-root user
 USER node
 EXPOSE 4000
