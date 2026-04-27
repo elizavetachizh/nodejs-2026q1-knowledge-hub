@@ -10,6 +10,7 @@ import { AccessGuard } from './common/guards/access.guard';
 import { AuthModule } from './auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AiModule } from './gemini/gemini.module';
 
 const getPositiveInt = (
   value: string | undefined,
@@ -22,6 +23,7 @@ const getPositiveInt = (
 
 @Module({
   imports: [
+    AiModule,
     JwtModule,
     AuthModule,
     PrismaModule,
