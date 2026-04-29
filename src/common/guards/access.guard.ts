@@ -15,7 +15,6 @@ export class AccessGuard implements CanActivate {
   ): boolean => {
     if (path === '/auth/logout' && method === 'POST') return true;
     if (role === UserRole.ADMIN) return true;
-
     if (role === UserRole.VIEWER) return method === 'GET';
     if (role === UserRole.EDITOR) {
       if (method === 'GET') return true;
@@ -36,6 +35,7 @@ export class AccessGuard implements CanActivate {
     if (path === '/auth/signup') return true;
     if (path === '/auth/login') return true;
     if (path === '/auth/refresh') return true;
+    if (path.startsWith('/ai')) return true;
     return false;
   }
   private isBearerToken(authorizationHeader: unknown): string {

@@ -16,3 +16,10 @@ export interface TranslateArticleResponse {
   translatedText: string;
   detectedLanguage: string;
 }
+
+export enum AnalyzeArticleTask {
+  REVIEW = 'review',
+  BUGS = 'bugs',
+  OPTIMIZE = 'optimize',
+  EXPLAIN = 'explain',
+}
