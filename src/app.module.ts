@@ -11,15 +11,7 @@ import { AuthModule } from './auth/auth.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AiModule } from './gemini/gemini.module';
-
-const getPositiveInt = (
-  value: string | undefined,
-  fallback: number,
-): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.trunc(parsed);
-};
+import { getPositiveInt } from './common/utils/get-positive-int';
 
 @Module({
   imports: [

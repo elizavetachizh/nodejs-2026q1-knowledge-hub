@@ -39,3 +39,6 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 /generated/prisma
+
+# workers
+/workers/.wrangler
