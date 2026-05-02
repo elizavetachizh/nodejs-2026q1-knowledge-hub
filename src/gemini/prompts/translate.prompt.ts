@@ -12,7 +12,7 @@ export function translatePrompt(input: TranslatePromptInput): string {
     `Translate the article into ${targetLanguage} (target locale/code).`,
     `Source language hint: ${sourceLanguage}.`,
     '',
-    "Hint: If the source language is not specified, use ISO 639-1 language code.",
+    'Hint: If the source language is not specified, use ISO 639-1 language code.',
     'Return a single JSON object only, no markdown, no commentary:',
     '{"translatedText": string, "detectedLanguage": string}',
     '`detectedLanguage` must be an ISO 639-1 language code for the ORIGINAL article (e.g. en, ru).',

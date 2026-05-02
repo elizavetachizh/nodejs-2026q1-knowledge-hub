@@ -68,6 +68,39 @@ describe('AccessGuard', () => {
       expect(guard.canActivate(context)).toBe(true);
       expect(jwtService.verify).not.toHaveBeenCalled();
     });
+
+    it('POST /ai/generate requires no Authorization', () => {
+      const { context } = createContext({
+        path: '/ai/generate',
+        method: 'POST',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+      expect(jwtService.verify).not.toHaveBeenCalled();
+    });
+
+    it('GET /ai/generate is not public (requires JWT)', () => {
+      const { context } = createContext({
+        path: '/ai/generate',
+        method: 'GET',
+      });
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
+    });
+
+    it('POST /ai/articles/:id/summarize requires JWT (not public)', () => {
+      const { context } = createContext({
+        path: '/ai/articles/550e8400-e29b-41d4-a716-446655440000/summarize',
+        method: 'POST',
+      });
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
+    });
+
+    it('GET /ai/usage is not public (requires JWT)', () => {
+      const { context } = createContext({
+        path: '/ai/usage',
+        method: 'GET',
+      });
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
+    });
   });
 
   describe('authentication', () => {
@@ -245,6 +278,71 @@ describe('AccessGuard', () => {
       });
       const { context } = createContext({
         path: '/category',
+        method: 'POST',
+        authorization: 'Bearer t',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+    });
+
+    it('allows viewer GET /ai/usage', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.VIEWER,
+      });
+      const { context } = createContext({
+        path: '/ai/usage',
+        method: 'GET',
+        authorization: 'Bearer t',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+    });
+
+    it('allows editor GET /ai/usage', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.EDITOR,
+      });
+      const { context } = createContext({
+        path: '/ai/usage',
+        method: 'GET',
+        authorization: 'Bearer t',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+    });
+
+    it('allows admin GET /ai/usage', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.ADMIN,
+      });
+      const { context } = createContext({
+        path: '/ai/usage',
+        method: 'GET',
+        authorization: 'Bearer t',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+    });
+
+    it('allows viewer POST /ai/articles/:id/summarize (article AI)', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.VIEWER,
+      });
+      const { context } = createContext({
+        path: '/ai/articles/550e8400-e29b-41d4-a716-446655440000/summarize',
+        method: 'POST',
+        authorization: 'Bearer t',
+      });
+      expect(guard.canActivate(context)).toBe(true);
+    });
+
+    it('allows editor POST /ai/articles/:id/translate', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.EDITOR,
+      });
+      const { context } = createContext({
+        path: '/ai/articles/550e8400-e29b-41d4-a716-446655440000/translate',
         method: 'POST',
         authorization: 'Bearer t',
       });

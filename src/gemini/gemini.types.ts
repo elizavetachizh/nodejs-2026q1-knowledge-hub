@@ -34,3 +34,7 @@ export interface AnalyzePayload {
   suggestions: string[];
   severity: 'info' | 'warning' | 'error';
 }
+
+export interface AiGenerateContentResponse {
+  text: string;
+}

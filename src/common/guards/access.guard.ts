@@ -8,6 +8,11 @@ import { UserRole } from 'src/user/dto/create-user.dto';
 
 @Injectable()
 export class AccessGuard implements CanActivate {
+  private isArticleAiPost(method: string, path: string): boolean {
+    if (method !== 'POST') return false;
+    return /^\/ai\/articles\/[^/]+\/(summarize|translate|analyze)$/.test(path);
+  }
+
   private roleAllows = (
     role: string,
     method: string,
@@ -15,6 +20,9 @@ export class AccessGuard implements CanActivate {
   ): boolean => {
     if (path === '/auth/logout' && method === 'POST') return true;
     if (role === UserRole.ADMIN) return true;
+
+    if (this.isArticleAiPost(method, path)) return true;
+
     if (role === UserRole.VIEWER) return method === 'GET';
     if (role === UserRole.EDITOR) {
       if (method === 'GET') return true;
@@ -29,13 +37,13 @@ export class AccessGuard implements CanActivate {
     }
     return false;
   };
-  private isPublicRoute(path: string) {
+  private isPublicRoute(path: string, method: string) {
     if (path === '/') return true;
     if (path.startsWith('/doc')) return true;
     if (path === '/auth/signup') return true;
     if (path === '/auth/login') return true;
     if (path === '/auth/refresh') return true;
-    if (path.startsWith('/ai')) return true;
+    if (path === '/ai/generate' && method === 'POST') return true;
     return false;
   }
   private isBearerToken(authorizationHeader: unknown): string {
@@ -71,7 +79,7 @@ export class AccessGuard implements CanActivate {
     const path = request.path;
     const method = request.method;
 
-    if (this.isPublicRoute(path)) return true;
+    if (this.isPublicRoute(path, method)) return true;
 
     const authHeader = request.headers.authorization;
     const token = this.isBearerToken(authHeader);

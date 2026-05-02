@@ -9,6 +9,7 @@ import {
 import { getReasonPhrase } from 'http-status-codes';
 import { Request, Response } from 'express';
 import { isAppHttpError } from '../errors/app-http.error';
+import { ensureRetryAfterHeader } from '../utils/retry-after.helper';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -25,6 +26,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         `${req.method} ${req.url} -> ${status} ${exception.message}`,
         'ExceptionFilter',
       );
+      ensureRetryAfterHeader(res, status);
       res.status(status).json({
         statusCode: status,
         error: getReasonPhrase(status),
@@ -44,6 +46,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }`,
         'ExceptionFilter',
       );
+
+      ensureRetryAfterHeader(res, status);
 
       res
         .status(status)

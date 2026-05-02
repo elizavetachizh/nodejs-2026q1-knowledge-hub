@@ -9,9 +9,21 @@ import {
 } from '../../../errors/app-http.error';
 
 function mockResponse() {
+  const headerStore = new Map<string, string>();
   const json = vi.fn();
   const status = vi.fn().mockReturnValue({ json });
-  return { status, json };
+  return {
+    status,
+    json,
+    headersSent: false,
+    get(name: string) {
+      return headerStore.get(String(name).toLowerCase());
+    },
+    setHeader(name: string, value: string | number) {
+      headerStore.set(String(name).toLowerCase(), String(value));
+    },
+    __headers: headerStore,
+  };
 }
 
 function mockHost(req: { method: string; url: string }) {
@@ -118,6 +130,30 @@ describe('AllExceptionsFilter', () => {
         'ExceptionFilter',
       );
       expect(res.status).toHaveBeenCalledWith(422);
+    });
+
+    it('sets Retry-After on 429 using X-RateLimit-Reset', () => {
+      const { host, res } = mockHost({ method: 'POST', url: '/ai/x' });
+      res.__headers!.set('x-ratelimit-reset', '41');
+      const setSpy = vi.spyOn(res, 'setHeader');
+
+      filter.catch(
+        new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS),
+        host as never,
+      );
+
+      expect(setSpy).toHaveBeenCalledWith('Retry-After', '41');
+      expect(res.status).toHaveBeenCalledWith(HttpStatus.TOO_MANY_REQUESTS);
+    });
+
+    it('does not force Retry-After on non-429 HttpException', () => {
+      const { host, res } = mockHost({ method: 'GET', url: '/k' });
+      const setSpy = vi.spyOn(res, 'setHeader');
+      filter.catch(
+        new HttpException('no', HttpStatus.BAD_REQUEST),
+        host as never,
+      );
+      expect(setSpy).not.toHaveBeenCalled();
     });
   });
 

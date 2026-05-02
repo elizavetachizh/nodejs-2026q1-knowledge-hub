@@ -61,16 +61,6 @@ To run RBAC (role-based access control) tests
 npm run test:rbac
 ```
 
-### Auto-fix and format
-
-```
-npm run lint
-```
-
-```
-npm run format
-```
-
 ## Docker
 
 Build and run the application with Docker Compose:
@@ -153,8 +143,7 @@ Follow these steps or AI routes will fail (503 / 500) or never reach Google.
 - A **PostgreSQL** database with migrations applied and (optionally) seed data (`npx prisma migrate deploy`, `npx prisma db seed`), so `/ai/articles/:id/...` can load articles.
 - **`GEMINI_API_KEY`** — see step 2.
 - **`GEMINI_API_BASE_URL` + `GEMINI_MODEL`** — see steps 3–4.
-
-Copy `.env.example` to `.env` and fill placeholders. Restart the server after edits.
+- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see **§5** (rate limit, cache TTL, usage notes).
 
 ---
 
@@ -214,7 +203,37 @@ The Swagger base URL stays `http://localhost:4000` (or **`PORT`**). Only outgoin
 
 ---
 
-### 5. Optional: HTTPS proxy debugging (undici — `EnvHttpProxyAgent`)
+### 5. AI cache, rate limits, and usage tracking
+
+These variables are listed in **`.env.example`**; set them in **`.env`** and restart the app.
+
+| Variable | Role |
+|----------|------|
+| **`AI_RATE_LIMIT_RPM`** | Maximum number of allowed calls to each `/ai/...` route **per client** within one rate-limit **window** (default **`20`**). |
+| **`AI_RATE_WINDOW_MS`** | Length of that window in **milliseconds** (default **`60000`** — one minute). This is **not** the same as cache lifetime. |
+| **`AI_CACHE_TTL_SEC`** | **Seconds** to keep **in-memory** responses for **`POST .../summarize`** and **`POST .../translate`** only. Cache keys include the article id, request parameters, and the article’s **`updatedAt`**, so edits to the article invalidate the logical key. Default **`300`**. **`/analyze`** and **`POST /ai/generate`** are **not** cached. |
+
+**Application rate limit:** when a client exceeds the configured limit, the API responds with **HTTP 429** (Too Many Requests). **`AllExceptionsFilter`** always sets standard **`Retry-After`** (seconds): it reuses a value already supplied by **`@nestjs/throttler`** if present; otherwise derives it from **`X-RateLimit-Reset`** (same semantics as Swagger’s **`x-ratelimit-reset`**); if neither exists, it falls back to **`ceil(THROTTLE_TTL / 1000)`** or **`ceil(AI_RATE_WINDOW_MS / 1000)`** (default ~60 s).
+
+**Upstream Gemini:** transient **429** responses from Google are retried inside **`GeminiHttpService`** with exponential backoff (see code). Persistent overload still surfaces as **503** with a generic message.
+
+**Usage tracking (in-memory):** since process start, the service accumulates total Gemini calls and per-route counts (**summarize**, **translate**, **analyze**, **generate**), token sums when **`usageMetadata`** is returned, **`latencyMsByEndpoint`** (average / max round-trip ms per route for real upstream requests — cache hits excluded), **`cache.hitRatio`** for **summarize** and **translate** only, plus **`diagnostics`** (counts of structured JSON fallbacks/coercions for analyze vs translate). Data is **not** persisted and is **reset on restart**. Read via **`GET /ai/usage`** with JWT **Bearer** (same access as article AI routes).
+
+#### AI routes (OpenAPI tag **AI**)
+
+| Method | Path | Body / access |
+|--------|------|----------------|
+| `GET` | `/ai/usage` | **Bearer JWT** (VIEWER+). Counters, tokens, latency, cache ratio, diagnostics. No throttle. |
+| `POST` | `/ai/articles/{id}/summarize` | **Bearer JWT** (VIEWER+). Optional **`maxLength`**: … |
+| `POST` | `/ai/articles/{id}/translate` | **Bearer JWT** (VIEWER+). **`targetLanguage`** … |
+| `POST` | `/ai/articles/{id}/analyze` | **Bearer JWT** (VIEWER+). Optional **`task`**: … |
+| `POST` | `/ai/generate` | **No auth.** **`prompt`** (required), optional **`context`**. |
+
+After **`npm run start:dev`**, open **`http://localhost:4000/doc`** and call these from the **AI** section (same host/port as the rest of the API).
+
+---
+
+### 6. Optional: HTTPS proxy debugging (undici — `EnvHttpProxyAgent`)
 
 The **`GeminiHttpService`** honours **`HTTP_PROXY`**, **`HTTPS_PROXY`**, **`NO_PROXY`** (see code). Use this **only when** debugging with a tool like Charles/Fiddler that listens as an HTTP CONNECT proxy.
 
@@ -226,7 +245,7 @@ You do **not** need **`HTTPS_PROXY`** for the Cloudflare Worker path in section 
 
 ---
 
-### 6. Run the app after `.env` is ready
+### 7. Run the app after `.env` is ready
 
 Local:
 
@@ -237,7 +256,7 @@ npx prisma migrate deploy
 npm run start:dev
 ```
 
-Swagger: `http://localhost:4000/doc` → authenticate → **`POST /ai/articles/{articleId}/summarize`**.
+Swagger: `http://localhost:4000/doc` → **Authorize** once for Bearer if you call **`POST /ai/articles/{articleId}/...`** or **`GET /ai/usage`** → **`POST /ai/generate`** works **without** token (see §5).
 
 Docker Compose reads **`.env`** via `env_file`:
 
@@ -253,7 +272,7 @@ docker compose exec app env | grep GEMINI
 
 ---
 
-### 7. Smoke test (outside Swagger)
+### 8. Smoke test (outside Swagger)
 
 Minimal `curl` shape (adjust host, model, key, Worker URL as needed):
 
@@ -264,25 +283,9 @@ curl -sS -X POST \
   -d '{"contents":[{"role":"user","parts":[{"text":"Say OK"}]}]}'
 ```
 
-Expect JSON with **`candidates`**. **`429`** = quota/exhaustion on Google side; **`fetch failed`** with proxy set = proxy not reachable (see §5).
+Expect JSON with **`candidates`**. **`429`** = quota/exhaustion on Google side; **`fetch failed`** with proxy set = proxy not reachable (see §6 — HTTPS proxy).
 
 ---
-
-### 8. Known limitations (typical assignment notes)
-
-- **Free tier quotas** — daily/minute caps; may return **`429`**; waiting or rotating keys/projects may help; paid/billing quotas differ by region/policy.
-- **Latency** — first token and regional routing add delay.
-- **Regional availability / account settings** affect whether a given key/project can enable **Generative Language API** quotas you see (check Google AI Studio / Cloud console).
-
----
-
-### 9. Troubleshooting checklist
-
-| Symptom | What to verify |
-|---------|----------------|
-| **`ECONNREFUSED 127.0.0.1:8888` in logs** | Remove/disable **`HTTPS_PROXY`/`HTTP_PROXY`** or start the proxy listener; adjust for Docker (**`host.docker.internal`**) only if intentional. |
-| **`GEMINI_API_KEY is not configured`** | Key missing in **`process.env`** for that process (`docker compose exec app env`). |
-| **`503` / overloaded message** | Upstream quotas or outages; inspect logs for **`Gemini upstream HTTP`** lines (response body summarized there). |
 
 ## Docker Hub Image
 
