@@ -14,6 +14,7 @@ import { analyzePrompt } from './prompts/analyze.prompt';
 import { AnalyzeArticleRequest } from './dto/analyze-gemini.dto';
 import { AppHttpError } from 'src/common/errors/app-http.error';
 import { getPositiveInt } from 'src/common/utils/get-positive-int';
+import { GeminiUsageService } from './gemini-usage.service';
 
 @Injectable()
 export class GeminiService {
@@ -23,6 +24,7 @@ export class GeminiService {
   constructor(
     private readonly geminiHttpService: GeminiHttpService,
     private readonly articleService: ArticleService,
+    private readonly geminiUsageService: GeminiUsageService,
   ) {}
 
   private cacheMap = new Map<string, { text: string; expiresAt: number }>();
@@ -43,6 +45,7 @@ export class GeminiService {
         summaryLength: cached.text.length,
       };
     } else {
+      this.cacheMap.delete(key);
       const result = await this.geminiHttpService.generateContent(
         summarizePrompt({
           title: article.title,
@@ -50,6 +53,7 @@ export class GeminiService {
           maxLength: body.maxLength,
         }),
       );
+      this.geminiUsageService.record('summarize', result.usageMetadata);
       this.cacheMap.set(key, {
         text: result.text,
         expiresAt: Date.now() + this.cacheTtlMs,
@@ -81,6 +85,7 @@ export class GeminiService {
         detectedLanguage: raw.detectedLanguage,
       };
     } else {
+      this.cacheMap.delete(key);
       const result = await this.geminiHttpService.generateContent(
         translatePrompt({
           title: article.title,
@@ -89,6 +94,7 @@ export class GeminiService {
           sourceLanguage: translateArticleBody.sourceLanguage,
         }),
       );
+      this.geminiUsageService.record('translate', result.usageMetadata);
       let raw: {
         translatedText: string;
         detectedLanguage: string;
@@ -123,7 +129,7 @@ export class GeminiService {
         task: analyzeArticleBody.task,
       }),
     );
-
+    this.geminiUsageService.record('analyze', result.usageMetadata);
     let parsed: unknown;
     try {
       parsed = JSON.parse(this.stripJsonFence(result.text));
@@ -153,6 +159,7 @@ export class GeminiService {
       severity: p.severity,
     };
   }
+  
   //   async generateContent(generateContentBody: GenerateContentRequest):Promise<GenerateContentResponse> {
   //     const prompt = `Generate content for the following article: ${generateContentBody.articleId}`;
   //     return {

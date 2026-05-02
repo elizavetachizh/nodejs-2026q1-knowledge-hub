@@ -26,7 +26,7 @@ export class GeminiController {
   @Post('articles/:id/summarize')
   @Throttle({
     default: {
-      ttl: getPositiveInt(process.env.AI_CACHE_TTL_SEC, 60000),
+      ttl: getPositiveInt(process.env.AI_RATE_WINDOW_MS, 60000),
       limit: getPositiveInt(process.env.AI_RATE_LIMIT_RPM, 20),
     },
   })
