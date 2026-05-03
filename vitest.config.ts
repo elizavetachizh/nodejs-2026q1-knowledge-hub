@@ -27,6 +27,7 @@ export default defineConfig({
         'src/middleware.ts',
         '**/*.dto.ts',
         '**/*.types.ts',
+        'src/common/logging/**',
       ],
       thresholds: {
         lines: 90,

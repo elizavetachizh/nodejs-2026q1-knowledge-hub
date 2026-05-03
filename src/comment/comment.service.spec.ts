@@ -1,4 +1,4 @@
-import { UnprocessableEntityException } from '@nestjs/common';
+import { UnprocessableEntityError } from 'src/common/errors/app-http.error';
 import { CommentService } from './comment.service';
 
 describe('CommentService', () => {
@@ -14,6 +14,6 @@ describe('CommentService', () => {
         articleId: '0a35dd62-e09f-444b-a628-f4e7c6954f57',
         authorId: null,
       }),
-    ).toThrow(UnprocessableEntityException);
+    ).toThrow(UnprocessableEntityError);
   });
 });

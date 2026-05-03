@@ -11,7 +11,7 @@ import {
   Put,
   Req,
 } from '@nestjs/common';
-import { ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ArticleService } from './article.service';
 import { ArticleStatus, CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -21,6 +21,7 @@ import { Article } from './article.types';
 import { JwtPayload } from 'src/auth/auth.types';
 type AuthRequest = { user: JwtPayload };
 @ApiTags('Article')
+@ApiBearerAuth('bearer')
 @Controller('article')
 export class ArticleController {
   constructor(private readonly articleService: ArticleService) {}

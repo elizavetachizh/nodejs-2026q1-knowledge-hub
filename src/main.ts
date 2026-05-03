@@ -1,16 +1,30 @@
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { ValidationPipe } from '@nestjs/common';
-import { loggingMiddleware } from './middleware';
+import { createHttpLoggingMiddleware } from './middleware';
 import { AccessGuard } from './common/guards/access.guard';
 import 'dotenv/config';
+import { AppLoggingService } from './common/logging/app-logging.service';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { registerProcessErrorHandlers } from './process-error-handlers';
 
 const port = process.env.PORT || 4000;
 
+let nestApp: INestApplication | undefined;
+
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.use(loggingMiddleware);
+  const appLogger = new AppLoggingService();
+  const app = await NestFactory.create(AppModule, {
+    logger: appLogger,
+  });
+  nestApp = app;
+
+  app.enableShutdownHooks();
+  registerProcessErrorHandlers(appLogger, () => nestApp);
+
+  app.useGlobalFilters(new AllExceptionsFilter(appLogger));
+  app.use(createHttpLoggingMiddleware(appLogger));
   app.useGlobalGuards(app.get(AccessGuard));
   // Global use of ValidationPipe
   app.useGlobalPipes(
@@ -36,7 +50,6 @@ async function bootstrap() {
       },
       'bearer',
     )
-    .addSecurityRequirements('bearer')
     .addTag('knowledge-hub')
     .addTag('Article', 'Operations with articles: create, read, update, delete')
     .addTag('User', 'Operations with users and roles')

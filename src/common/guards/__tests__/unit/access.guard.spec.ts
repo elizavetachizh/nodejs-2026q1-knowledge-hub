@@ -1,8 +1,8 @@
+import { ExecutionContext } from '@nestjs/common';
 import {
-  ExecutionContext,
-  ForbiddenException,
-  UnauthorizedException,
-} from '@nestjs/common';
+  ForbiddenError,
+  UnauthorizedError,
+} from 'src/common/errors/app-http.error';
 import { JwtService } from '@nestjs/jwt';
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AccessGuard } from 'src/common/guards/access.guard';
@@ -76,7 +76,7 @@ describe('AccessGuard', () => {
         path: '/article',
         method: 'GET',
       });
-      expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
       expect(() => guard.canActivate(context)).toThrow(
         'Authorization header is missing',
       );
@@ -88,7 +88,7 @@ describe('AccessGuard', () => {
         method: 'GET',
         authorization: 'Basic xyz',
       });
-      expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
       expect(() => guard.canActivate(context)).toThrow('Invalid token');
     });
 
@@ -98,7 +98,7 @@ describe('AccessGuard', () => {
         method: 'GET',
         authorization: 'Bearer ',
       });
-      expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
       expect(() => guard.canActivate(context)).toThrow('Token is missing');
     });
 
@@ -111,7 +111,7 @@ describe('AccessGuard', () => {
         method: 'GET',
         authorization: 'Bearer token',
       });
-      expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
       expect(() => guard.canActivate(context)).toThrow('Invalid token');
     });
 
@@ -122,7 +122,7 @@ describe('AccessGuard', () => {
         method: 'GET',
         authorization: 'Bearer token',
       });
-      expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(UnauthorizedError);
     });
 
     it('verifies with JWT_SECRET and attaches user to request', () => {
@@ -169,7 +169,7 @@ describe('AccessGuard', () => {
         method: 'POST',
         authorization: 'Bearer t',
       });
-      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
       expect(() => guard.canActivate(context)).toThrow('Access denied');
     });
 
@@ -186,6 +186,19 @@ describe('AccessGuard', () => {
       expect(guard.canActivate(context)).toBe(true);
     });
 
+    it('denies editor PATCH /article (only POST/PUT/DELETE allowed for mutations)', () => {
+      jwtService.verify.mockReturnValue({
+        ...validPayload,
+        role: UserRole.EDITOR,
+      });
+      const { context } = createContext({
+        path: '/article/550e8400-e29b-41d4-a716-446655440000',
+        method: 'PATCH',
+        authorization: 'Bearer t',
+      });
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
+    });
+
     it('denies editor mutating /category', () => {
       jwtService.verify.mockReturnValue({
         ...validPayload,
@@ -196,7 +209,7 @@ describe('AccessGuard', () => {
         method: 'POST',
         authorization: 'Bearer t',
       });
-      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
     });
 
     it('allows editor GET /category', () => {
@@ -222,7 +235,7 @@ describe('AccessGuard', () => {
         method: 'DELETE',
         authorization: 'Bearer t',
       });
-      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenError);
     });
 
     it('allows admin POST /category', () => {
