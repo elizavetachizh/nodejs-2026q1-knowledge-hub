@@ -1,0 +1,14 @@
+# Минимальный пример для деплоя Worker (Cloudflare Wrangler v3+).
+# После правок: npx wrangler deploy
+
+name = "gemini-proxy"
+main = "gemini-proxy.worker.js"
+compatibility_date = "2024-01-01"
+
+# Публичные переменные (не секреты):
+[vars]
+GEMINI_PROXY_UPSTREAM_ORIGIN = "https://generativelanguage.googleapis.com"
+GEMINI_PROXY_INJECT_KEY = "false"
+
+# Секрет: wrangler secret put GEMINI_API_KEY
+# Если INJECT_KEY=true и Nest не передаёт ?key= — ключ нужен на Worker.

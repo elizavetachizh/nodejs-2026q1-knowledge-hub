@@ -141,13 +141,13 @@ Follow these steps or AI routes will fail (503 / 500) or never reach Google.
 ### 1. Prerequisites
 
 - A **PostgreSQL** database with migrations applied and (optionally) seed data (`npx prisma migrate deploy`, `npx prisma db seed`), so `/ai/articles/:id/...` can load articles.
-- **`GEMINI_API_KEY`** — see step 2.
-- **`GEMINI_API_BASE_URL` + `GEMINI_MODEL`** — see steps 3–4.
-- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see **§5** (rate limit, cache TTL, usage notes).
+- **`GEMINI_API_KEY` + `GEMINI_MODEL`** — see step 2.
+- **`GEMINI_API_BASE_URL`** — see step 3.
+- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see step 5(rate limit, cache TTL, usage notes).
 
 ---
 
-### 2. How to obtain a Gemini API key
+### 2. Gemini API key + Gemini model
 
 1. Open **[Google AI Studio](https://aistudio.google.com)** and sign in.
 2. Go to **Get API key** (or **API keys**).
@@ -159,19 +159,11 @@ Follow these steps or AI routes will fail (503 / 500) or never reach Google.
    GEMINI_API_KEY=<paste-your-key-here>
    ```
 
----
-
-### 3. Which model is used?
-
-Set **`GEMINI_MODEL`** in `.env`. It must match a model identifier your key can call (examples: `gemini-2.0-flash`, `gemini-2.5-flash`). The app builds:
-
-`POST {GEMINI_API_BASE_URL}/{GEMINI_MODEL}:generateContent?key=...`
-
-Keep `GEMINI_MODEL` aligned with any manual `curl`/tests against the API.
+Set **`GEMINI_MODEL`** in `.env`. It must match a model identifier your key can call (examples: `gemini-2.0-flash`, `gemini-2.5-flash`).
 
 ---
 
-### 4. Base URL — two supported modes
+### 3. Base URL — two supported modes
 
 You must choose **one** base URL style and set **`GEMINI_API_BASE_URL`** accordingly (**no trailing slash** at the base; the suffix below is intentional).
 
@@ -181,7 +173,7 @@ You must choose **one** base URL style and set **`GEMINI_API_BASE_URL`** accordi
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models
 ```
 
-Works if your environment can reach Google’s API endpoints over HTTPS.
+Works if your environment can reach Google’s API endpoints over HTTPS. You can use Fiddler for testing
 
 #### B) Via your Cloudflare Worker (reverse proxy to Google)
 
@@ -203,7 +195,7 @@ The Swagger base URL stays `http://localhost:4000` (or **`PORT`**). Only outgoin
 
 ---
 
-### 5. AI cache, rate limits, and usage tracking
+### 4. AI cache, rate limits, and usage tracking
 
 These variables are listed in **`.env.example`**; set them in **`.env`** and restart the app.
 
@@ -213,11 +205,7 @@ These variables are listed in **`.env.example`**; set them in **`.env`** and res
 | **`AI_RATE_WINDOW_MS`** | Length of that window in **milliseconds** (default **`60000`** — one minute). This is **not** the same as cache lifetime. |
 | **`AI_CACHE_TTL_SEC`** | **Seconds** to keep **in-memory** responses for **`POST .../summarize`** and **`POST .../translate`** only. Cache keys include the article id, request parameters, and the article’s **`updatedAt`**, so edits to the article invalidate the logical key. Default **`300`**. **`/analyze`** and **`POST /ai/generate`** are **not** cached. |
 
-**Application rate limit:** when a client exceeds the configured limit, the API responds with **HTTP 429** (Too Many Requests). **`AllExceptionsFilter`** always sets standard **`Retry-After`** (seconds): it reuses a value already supplied by **`@nestjs/throttler`** if present; otherwise derives it from **`X-RateLimit-Reset`** (same semantics as Swagger’s **`x-ratelimit-reset`**); if neither exists, it falls back to **`ceil(THROTTLE_TTL / 1000)`** or **`ceil(AI_RATE_WINDOW_MS / 1000)`** (default ~60 s).
-
 **Upstream Gemini:** transient **429** responses from Google are retried inside **`GeminiHttpService`** with exponential backoff (see code). Persistent overload still surfaces as **503** with a generic message.
-
-**Usage tracking (in-memory):** since process start, the service accumulates total Gemini calls and per-route counts (**summarize**, **translate**, **analyze**, **generate**), token sums when **`usageMetadata`** is returned, **`latencyMsByEndpoint`** (average / max round-trip ms per route for real upstream requests — cache hits excluded), **`cache.hitRatio`** for **summarize** and **translate** only, plus **`diagnostics`** (counts of structured JSON fallbacks/coercions for analyze vs translate). Data is **not** persisted and is **reset on restart**. Read via **`GET /ai/usage`** with JWT **Bearer** (same access as article AI routes).
 
 #### AI routes (OpenAPI tag **AI**)
 
@@ -228,24 +216,9 @@ These variables are listed in **`.env.example`**; set them in **`.env`** and res
 | `POST` | `/ai/articles/{id}/translate` | **Bearer JWT** (VIEWER+). **`targetLanguage`** … |
 | `POST` | `/ai/articles/{id}/analyze` | **Bearer JWT** (VIEWER+). Optional **`task`**: … |
 | `POST` | `/ai/generate` | **No auth.** **`prompt`** (required), optional **`context`**. |
-
-After **`npm run start:dev`**, open **`http://localhost:4000/doc`** and call these from the **AI** section (same host/port as the rest of the API).
-
 ---
 
-### 6. Optional: HTTPS proxy debugging (undici — `EnvHttpProxyAgent`)
-
-The **`GeminiHttpService`** honours **`HTTP_PROXY`**, **`HTTPS_PROXY`**, **`NO_PROXY`** (see code). Use this **only when** debugging with a tool like Charles/Fiddler that listens as an HTTP CONNECT proxy.
-
-- **`HTTPS_PROXY=http://127.0.0.1:8888`** is valid **only when** something is listening on that host/port (e.g. Fiddler on the same machine).
-
-- Inside **Docker Desktop**, **`127.0.0.1` is inside the container** — your Mac’s proxy is not there. Omit proxy vars unless you know you need MITM debugging; otherwise you get `ECONNREFUSED` when calling Gemini.
-
-You do **not** need **`HTTPS_PROXY`** for the Cloudflare Worker path in section 4B — **`GEMINI_API_BASE_URL`** already targets the Worker over HTTPS.
-
----
-
-### 7. Run the app after `.env` is ready
+### 5. Run the app after `.env` is ready
 
 Local:
 
@@ -272,7 +245,7 @@ docker compose exec app env | grep GEMINI
 
 ---
 
-### 8. Smoke test (outside Swagger)
+### 6. Smoke test (outside Swagger)
 
 Minimal `curl` shape (adjust host, model, key, Worker URL as needed):
 
