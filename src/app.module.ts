@@ -12,6 +12,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AiModule } from './gemini/gemini.module';
 import { getPositiveInt } from './common/utils/get-positive-int';
+import { RagModule } from './rag/rag.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { getPositiveInt } from './common/utils/get-positive-int';
     ArticleModule,
     CategoryModule,
     CommentModule,
+    RagModule,
     ThrottlerModule.forRoot({
       throttlers: [
         {

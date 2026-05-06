@@ -50,10 +50,9 @@ export default {
       });
     }
 
-    const upstreamOrigin = (env.GEMINI_PROXY_UPSTREAM_ORIGIN || DEFAULT_UPSTREAM).replace(
-      /\/$/,
-      '',
-    );
+    const upstreamOrigin = (
+      env.GEMINI_PROXY_UPSTREAM_ORIGIN || DEFAULT_UPSTREAM
+    ).replace(/\/$/, '');
     const incoming = new URL(request.url);
     const upstream = new URL(upstreamOrigin);
 

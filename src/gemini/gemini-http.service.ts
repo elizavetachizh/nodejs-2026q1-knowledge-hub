@@ -12,6 +12,13 @@ const MAX_RATE_LIMIT_RETRIES = 3;
 const RATE_LIMIT_BACKOFF_BASE_MS = 1_000;
 const RETRY_AFTER_MAX_MS = 32_000;
 
+type UpstreamCallOptions<T> = {
+  url: string;
+  body: string;
+  serviceLabel: 'generation' | 'embedding';
+  parseOk: (json: unknown) => T;
+};
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -25,8 +32,7 @@ function parseRetryAfterMs(header: string | null): number | undefined {
   const trimmed = header.trim();
   const sec = Number.parseInt(trimmed, 10);
   if (Number.isFinite(sec) && sec >= 0) {
-    const ms = Math.min(sec * 1000, RETRY_AFTER_MAX_MS);
-    return ms;
+    return Math.min(sec * 1000, RETRY_AFTER_MAX_MS);
   }
   const date = Date.parse(trimmed);
   if (Number.isFinite(date)) {
@@ -64,10 +70,6 @@ function normalizeUsage(metadata: unknown): GeminiGenerationUsage | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/**
- * Исходящие запросы к Gemini через undici `fetch` и {@link EnvHttpProxyAgent}:
- * HTTP_PROXY, HTTPS_PROXY, NO_PROXY (как у многих CLI).
- */
 @Injectable()
 export class GeminiHttpService implements OnApplicationShutdown {
   private readonly logger = new Logger(GeminiHttpService.name);
@@ -76,7 +78,103 @@ export class GeminiHttpService implements OnApplicationShutdown {
     process.env.GEMINI_API_BASE_URL || 'http://127.0.0.1:8787/v1beta/models';
   private readonly model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   private readonly apiKey = process.env.GEMINI_API_KEY;
-
+  private readonly embeddingModel =
+    process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
+  private async callGeminiWithRetry<T>({
+    url,
+    body,
+    serviceLabel,
+    parseOk,
+  }: UpstreamCallOptions<T>): Promise<T> {
+    for (
+      let rateLimitAttempt = 0;
+      rateLimitAttempt <= MAX_RATE_LIMIT_RETRIES;
+      rateLimitAttempt++
+    ) {
+      let response: UndiciResponse;
+      try {
+        response = await undiciFetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          dispatcher: this.fetchDispatcher,
+        });
+      } catch (err) {
+        const e = err as Error & { cause?: unknown };
+        const detail =
+          err instanceof Error
+            ? `${e.message}${
+                e.cause !== undefined
+                  ? ` | cause: ${
+                      e.cause instanceof Error
+                        ? e.cause.message
+                        : String(e.cause)
+                    }`
+                  : ''
+              }`
+            : String(err);
+        this.logger.error(`Gemini ${serviceLabel} fetch failed: ${detail}`);
+        throw new AppHttpError(
+          503,
+          `The ${serviceLabel} service is temporarily unreachable.`,
+        );
+      }
+      if (response.ok) {
+        const data = (await response.json()) as unknown;
+        return parseOk(data);
+      }
+      const errRaw = await response.text().catch(() => '');
+      let logPayload = errRaw.slice(0, 3000);
+      try {
+        const parsed = JSON.parse(errRaw) as Record<string, unknown>;
+        logPayload = JSON.stringify(sanitizeForLog(parsed));
+      } catch {
+        /** not JSON */
+      }
+      this.logger.warn(
+        `Gemini ${serviceLabel} upstream HTTP ${response.status} ${
+          response.statusText || '(no status text)'
+        }: ${logPayload}`,
+      );
+      const upstream = response.status;
+      const isRetryableRateLimit =
+        upstream === 429 && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES;
+      if (isRetryableRateLimit) {
+        const delayMs = pickDelayAfter429(response, rateLimitAttempt);
+        this.logger.warn(
+          `Gemini ${serviceLabel} rate limited (429), retry ${
+            rateLimitAttempt + 1
+          }/${MAX_RATE_LIMIT_RETRIES} after ${delayMs}ms`,
+        );
+        await sleep(delayMs);
+        continue;
+      }
+      if (upstream === 401 || upstream === 403) {
+        throw new AppHttpError(
+          500,
+          `${serviceLabel[0].toUpperCase()}${serviceLabel.slice(1)} service authentication failed.`,
+        );
+      }
+      if (upstream === 429 || upstream === 503) {
+        throw new AppHttpError(
+          503,
+          `The ${serviceLabel} service is temporarily overloaded. Please try again later.`,
+        );
+      }
+      const status = upstream >= 400 && upstream < 600 ? upstream : 502;
+      throw new AppHttpError(
+        status,
+        status === 400 || status === 404
+          ? `The ${serviceLabel} service rejected the request.`
+          : `The ${serviceLabel} service request failed.`,
+      );
+    }
+    throw new AppHttpError(
+      503,
+      `The ${serviceLabel} service is temporarily overloaded. Please try again later.`,
+    );
+  }
   constructor() {
     const hasProxyHints =
       Boolean(
@@ -112,45 +210,15 @@ export class GeminiHttpService implements OnApplicationShutdown {
     const body = JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
-
-    for (
-      let rateLimitAttempt = 0;
-      rateLimitAttempt <= MAX_RATE_LIMIT_RETRIES;
-      rateLimitAttempt++
-    ) {
-      let response: UndiciResponse;
-      try {
-        response = await undiciFetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          dispatcher: this.fetchDispatcher,
-        });
-      } catch (err) {
-        const e = err as Error & { cause?: unknown };
-        const detail =
-          err instanceof Error
-            ? `${e.message}${
-                e.cause !== undefined
-                  ? ` | cause: ${
-                      e.cause instanceof Error
-                        ? e.cause.message
-                        : String(e.cause)
-                    }`
-                  : ''
-              }`
-            : String(err);
-        this.logger.error(`Gemini fetch failed: ${detail}`);
-        throw new AppHttpError(
-          503,
-          'The generation service is temporarily unreachable.',
-        );
-      }
-
-      if (response.ok) {
-        const data = (await response.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    return this.callGeminiWithRetry({
+      url,
+      body,
+      serviceLabel: 'generation',
+      parseOk: (json) => {
+        const data = json as {
+          candidates?: Array<{
+            content?: { parts?: Array<{ text?: string }> };
+          }>;
           usageMetadata?: unknown;
         };
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -161,62 +229,43 @@ export class GeminiHttpService implements OnApplicationShutdown {
           );
         }
         const usageMetadata = normalizeUsage(data.usageMetadata);
-        return usageMetadata !== undefined ? { text, usageMetadata } : { text };
-      }
+        return { text, usageMetadata };
+      },
+    });
+  }
 
-      const errRaw = await response.text().catch(() => '');
-      let logPayload = errRaw.slice(0, 3000);
-      try {
-        const parsed = JSON.parse(errRaw) as Record<string, unknown>;
-        logPayload = JSON.stringify(sanitizeForLog(parsed));
-      } catch {
-        /** not JSON — truncated text ok */
-      }
-      this.logger.warn(
-        `Gemini upstream HTTP ${response.status} ${response.statusText || '(no status text)'}: ${logPayload}`,
-      );
-
-      const upstream = response.status;
-      const isRetryableRateLimit =
-        upstream === 429 && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES;
-
-      if (isRetryableRateLimit) {
-        const delayMs = pickDelayAfter429(response, rateLimitAttempt);
-        this.logger.warn(
-          `Gemini rate limited (429), retry ${rateLimitAttempt + 1}/${MAX_RATE_LIMIT_RETRIES} after ${delayMs}ms`,
-        );
-        await sleep(delayMs);
-        continue;
-      }
-
-      if (upstream === 401 || upstream === 403) {
-        throw new AppHttpError(
-          500,
-          'Generation service authentication failed.',
-        );
-      }
-
-      if (upstream === 429 || upstream === 503) {
-        throw new AppHttpError(
-          503,
-          'The generation service is temporarily overloaded. Please try again later.',
-        );
-      }
-
-      const status =
-        upstream >= 400 && upstream < 600 ? upstream : 502;
-
+  async embedContent(text: string): Promise<number[]> {
+    if (!this.apiKey) {
       throw new AppHttpError(
-        status,
-        status === 400 || status === 404
-          ? 'The generation service rejected the request.'
-          : 'The generation service request failed.',
+        500,
+        'GEMINI_API_KEY is not configured. Set it in environment for this process.',
       );
     }
+    if (!text.trim()) {
+      throw new AppHttpError(400, 'Text for embedding must not be empty.');
+    }
 
-    throw new AppHttpError(
-      503,
-      'The generation service is temporarily overloaded. Please try again later.',
-    );
+    const url = `${this.baseUrl}/${this.embeddingModel}:embedContent?key=${encodeURIComponent(this.apiKey)}`;
+    const body = JSON.stringify({
+      content: { parts: [{ text }] },
+    });
+    return this.callGeminiWithRetry({
+      url,
+      body,
+      serviceLabel: 'embedding',
+      parseOk: (json) => {
+        const data = json as {
+          embedding?: { values?: unknown };
+        };
+        const values = data.embedding?.values;
+        if (!Array.isArray(values) || values.length === 0) {
+          throw new AppHttpError(
+            502,
+            'The embedding service returned an invalid response.',
+          );
+        }
+        return values;
+      },
+    });
   }
 }
