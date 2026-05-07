@@ -142,7 +142,7 @@ export class ArticleController {
   }
 
   @Delete(':id')
-  @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(204)
   async deleteArticle(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() request: AuthRequest,

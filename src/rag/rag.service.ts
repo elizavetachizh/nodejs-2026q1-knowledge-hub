@@ -4,8 +4,12 @@ import { ArticleService } from 'src/article/article.service';
 import { ArticleStatus } from 'src/article/dto/create-article.dto';
 import { RagQdrantService } from './rag-qdrant.service';
 import { GeminiHttpService } from 'src/gemini/gemini-http.service';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { RagSearchRequestDto } from './dto/rag-search-request.dto';
+import { RagChatResponse, RagSearchResponse } from './rag.types';
+import { RagChatRequestDto } from './dto/rag-chat.dto';
+import { ragChatPrompt } from './prompts/rag-chat.prompt';
+import { NotFoundError } from 'src/common/errors/app-http.error';
 
 type ChunkedArticle = {
   chunkId: string;
@@ -45,23 +49,35 @@ export class RagService {
   }
 
   async indexArticle(body: RagIndexRequestDto) {
+    const onlyPublished = body.onlyPublished ?? true;
     const articles = await this.articleService.getArticles(
-      ArticleStatus.PUBLISHED,
+      onlyPublished ? ArticleStatus.PUBLISHED : undefined,
     );
     const filtered = body.articleIds?.length
       ? articles.filter((a) => body.articleIds!.includes(a.id))
       : articles;
+
     let indexedArticles = 0;
     let indexedChunks = 0;
+
+    await this.ragQdrantService.ensureCollection();
     for (const article of filtered) {
+      try {
+        await this.ragQdrantService.deleteByArticleId(article.id);
+      } catch (e) {
+        if (!(e instanceof NotFoundError)) throw e;
+      }
+
       const chunks = await this.chunkText(article.content);
       if (!chunks.length) continue;
+
       const vectors = await Promise.all(
         chunks.map((c) => this.geminiHttpService.embedContent(c.chunkText)),
       );
+
       await this.ragQdrantService.upsertChunks(
         chunks.map((c, i) => ({
-          id: c.chunkId,
+          id: `${article.id}:${c.chunkId}`,
           vector: vectors[i],
           articleId: article.id,
           articleTitle: article.title,
@@ -83,15 +99,57 @@ export class RagService {
         process.env.RAG_VECTOR_COLLECTION || 'knowledge_hub_articles',
     };
   }
-  async search(body: RagSearchRequestDto) {
+  async search(body: RagSearchRequestDto): Promise<RagSearchResponse> {
     const { query, articleStatus, categoryId, tags, limit = 5 } = body;
     const queryVector = await this.geminiHttpService.embedContent(query);
-    return await this.ragQdrantService.searchByVector({
+    const results = await this.ragQdrantService.searchByVector({
       queryVector,
       articleStatus,
       categoryId,
       tags,
       limit,
     });
+    return {
+      results: results.map((r) => ({
+        articleId: r.payload?.articleId as string,
+        articleTitle: r.payload?.articleTitle as string,
+        chunk: r.payload?.chunkText as string,
+        similarity: r.score,
+      })),
+    };
   }
+  async deleteByArticleId(articleId: string): Promise<void> {
+    await this.ragQdrantService.deleteByArticleId(articleId);
+  }
+
+  async chat(body: RagChatRequestDto): Promise<RagChatResponse> {
+    const { question, conversationId } = body;
+    const queryVector = await this.geminiHttpService.embedContent(question);
+    const chunks = await this.ragQdrantService.searchByVector({
+      queryVector,
+      limit: 5,
+    });
+    const result = await this.geminiHttpService.generateContent(
+      ragChatPrompt({
+        question,
+        chunks: chunks.map((c) => ({
+          articleId: c.payload?.articleId as string,
+          articleTitle: c.payload?.articleTitle as string,
+          chunkText: c.payload?.chunkText as string,
+        })),
+      }),
+    );
+    const answer = result.text;
+    const conversationIdForResponse = conversationId || randomUUID();
+    return {
+      answer,
+      sources: chunks.map((c) => ({
+        articleId: c.payload?.articleId as string,
+        articleTitle: c.payload?.articleTitle as string,
+        relevantChunk: c.payload?.chunkText as string,
+      })),
+      conversationId: conversationIdForResponse,
+    };
+  }
+  async chatHistory(conversationId: string) {}
 }

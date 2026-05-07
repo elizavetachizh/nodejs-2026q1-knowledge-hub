@@ -12,3 +12,13 @@ export interface RagSearchResponse {
     similarity: number;
   }>;
 }
+
+export interface RagChatResponse {
+  answer: string;
+  sources: Array<{
+    articleId: string;
+    articleTitle: string;
+    relevantChunk: string;
+  }>;
+  conversationId: string;
+}

@@ -1,7 +1,7 @@
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { Injectable } from '@nestjs/common';
 import { ArticleStatus } from 'src/article/dto/create-article.dto';
-import { AppHttpError } from 'src/common/errors/app-http.error';
+import { AppHttpError, NotFoundError } from 'src/common/errors/app-http.error';
 
 type SearchByVectorParams = {
   queryVector: number[];
@@ -68,7 +68,6 @@ export class RagQdrantService {
       throw new AppHttpError(
         503,
         `Vector database error: Failed to upsert chunks`,
-        { error: error },
       );
     }
   }
@@ -81,7 +80,9 @@ export class RagQdrantService {
       tags,
       limit = 5,
     } = params;
+    const fixedLimit = Math.min(20, Math.max(1, limit ?? 5));
     const must: Array<Record<string, unknown>> = [];
+    const should: Array<Record<string, unknown>> = [];
     if (articleId) {
       must.push({
         key: 'articleId',
@@ -107,8 +108,8 @@ export class RagQdrantService {
       });
     }
     if (tags?.length) {
-      must.push({
-        should: tags.map((tag) => ({
+      should.push({
+        ...tags.map((tag) => ({
           key: 'tags',
           match: {
             value: tag,
@@ -116,40 +117,43 @@ export class RagQdrantService {
         })),
       });
     }
+    const filter: Record<string, unknown> = {};
+    if (must.length) filter.must = must;
+    if (should.length) filter.should = should;
     try {
       return await this.qdrantClient.search(this.collectionName, {
         vector: queryVector,
-        limit,
+        limit: fixedLimit,
         with_payload: true,
-        ...(must.length > 0 ? { filter: { must } } : {}),
+        ...(Object.keys(filter).length > 0 ? { filter } : {}),
       });
     } catch (error) {
-      throw new AppHttpError(503, `Vector database error: ${error.message}`, {
-        error: error,
-      });
+      throw new AppHttpError(503, `Vector database error: ${error.message}`);
     }
   }
-  async deleteByArticleId(articleId: string) {
+  async deleteByArticleId(articleId: string): Promise<number> {
+    const filter = {
+      must: [{ key: 'articleId', match: { value: articleId } }],
+    };
+
     try {
-      await this.qdrantClient.delete(this.collectionName, {
-        filter: {
-          must: [
-            {
-              key: 'articleId',
-              match: {
-                value: articleId,
-              },
-            },
-          ],
-        },
+      const countResult = await this.qdrantClient.count(this.collectionName, {
+        filter,
+        exact: true,
       });
+      const pointsToDelete = countResult.count ?? 0;
+      if (pointsToDelete === 0) {
+        throw new NotFoundError(`Article ${articleId} not found in index`);
+      }
+
+      await this.qdrantClient.delete(this.collectionName, {
+        filter,
+        wait: true,
+      });
+
+      return pointsToDelete;
     } catch (error) {
-      throw new AppHttpError(
-        503,
-        `Failed to delete article ${articleId} from Qdrant`,
-        { error: error },
-      );
+      throw new AppHttpError(503, `Vector database error: ${error.message}`);
     }
-    return true;
   }
 }
