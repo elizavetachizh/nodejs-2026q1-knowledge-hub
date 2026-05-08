@@ -35,17 +35,24 @@ export class RagQdrantService {
   constructor() {}
 
   async ensureCollection() {
-    const collections = await this.qdrantClient.getCollections();
-    const exists = collections.collections.some(
-      (c) => c.name === this.collectionName,
-    );
-    if (exists) return;
-    await this.qdrantClient.createCollection(this.collectionName, {
-      vectors: {
-        size: this.vectorSize,
-        distance: 'Cosine',
-      },
-    });
+    try {
+      const collections = await this.qdrantClient.getCollections();
+      const exists = collections.collections.some(
+        (c) => c.name === this.collectionName,
+      );
+      if (exists) return;
+      await this.qdrantClient.createCollection(this.collectionName, {
+        vectors: {
+          size: this.vectorSize,
+          distance: 'Cosine',
+        },
+      });
+    } catch (error) {
+      throw new AppHttpError(
+        503,
+        `Vector database error: Failed to create collection`,
+      );
+    }
   }
   async upsertChunks(chunks: UpsertChunkParams[]) {
     try {
@@ -67,7 +74,9 @@ export class RagQdrantService {
     } catch (error) {
       throw new AppHttpError(
         503,
-        `Vector database error: Failed to upsert chunks`,
+        `Vector database error: Failed to upsert chunks${
+          error instanceof Error ? ` (${error.message})` : ''
+        }`,
       );
     }
   }
@@ -108,14 +117,14 @@ export class RagQdrantService {
       });
     }
     if (tags?.length) {
-      should.push({
+      should.push(
         ...tags.map((tag) => ({
           key: 'tags',
           match: {
             value: tag,
           },
         })),
-      });
+      );
     }
     const filter: Record<string, unknown> = {};
     if (must.length) filter.must = must;
@@ -153,6 +162,9 @@ export class RagQdrantService {
 
       return pointsToDelete;
     } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
       throw new AppHttpError(503, `Vector database error: ${error.message}`);
     }
   }

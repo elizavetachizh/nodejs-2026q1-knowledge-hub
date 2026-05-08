@@ -15,7 +15,7 @@ import { ArticleStatus } from 'src/article/dto/create-article.dto';
 export class RagSearchRequestDto {
   @ApiProperty({
     description: 'Query to search',
-    example: 'What is the capital of France?',
+    example: 'How to integrate Gemini API for this project?',
   })
   @IsString()
   @IsNotEmpty()

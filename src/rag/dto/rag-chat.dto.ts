@@ -3,8 +3,8 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class RagChatRequestDto {
   @ApiProperty({
-    description: 'Query to search',
-    example: 'What is the capital of France?',
+    description: 'User question for grounded RAG answer generation',
+    example: 'How set Prisma and PostgreSQL in this project?',
   })
   @IsString()
   @IsNotEmpty()

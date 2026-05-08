@@ -14,6 +14,11 @@ enum UserRole {
   VIEWER
 }
 
+enum ConversationUserRole {
+  USER
+  ASSISTANT
+}
+
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -75,4 +80,15 @@ model Tag {
   id       Int       @id @default(autoincrement())
   name     String    @unique
   articles Article[]
+}
+
+model RagConversationMessage {
+  id             String               @id @default(uuid())
+  conversationId String               
+  role           ConversationUserRole @default(USER)
+  content        String               @db.Text
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
 }

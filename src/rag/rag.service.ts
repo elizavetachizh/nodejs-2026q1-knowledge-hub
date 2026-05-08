@@ -10,6 +10,9 @@ import { RagChatResponse, RagSearchResponse } from './rag.types';
 import { RagChatRequestDto } from './dto/rag-chat.dto';
 import { ragChatPrompt } from './prompts/rag-chat.prompt';
 import { NotFoundError } from 'src/common/errors/app-http.error';
+import { v5 as uuidv5 } from 'uuid';
+import { RagConversationService } from './rag-conversation.service';
+import { fromPrismaConversationRole } from './utils/conversation-role.mapper';
 
 type ChunkedArticle = {
   chunkId: string;
@@ -18,10 +21,12 @@ type ChunkedArticle = {
 };
 @Injectable()
 export class RagService {
+  private static readonly QDRANT_POINT_NAMESPACE = uuidv5.URL;
   constructor(
     private readonly geminiHttpService: GeminiHttpService,
     private readonly articleService: ArticleService,
     private readonly ragQdrantService: RagQdrantService,
+    private readonly ragConversationService: RagConversationService,
   ) {}
   private chunkText(text: string): ChunkedArticle[] {
     const size = Number(process.env.RAG_CHUNK_SIZE ?? 800);
@@ -46,6 +51,10 @@ export class RagService {
       });
     }
     return chunks;
+  }
+
+  private toQdrantPointId(articleId: string, chunkId: string): string {
+    return uuidv5(`${articleId}:${chunkId}`, RagService.QDRANT_POINT_NAMESPACE);
   }
 
   async indexArticle(body: RagIndexRequestDto) {
@@ -77,7 +86,7 @@ export class RagService {
 
       await this.ragQdrantService.upsertChunks(
         chunks.map((c, i) => ({
-          id: `${article.id}:${c.chunkId}`,
+          id: this.toQdrantPointId(article.id, c.chunkId),
           vector: vectors[i],
           articleId: article.id,
           articleTitle: article.title,
@@ -129,6 +138,21 @@ export class RagService {
       queryVector,
       limit: 5,
     });
+
+    const conversationIdForResponse = conversationId || randomUUID();
+
+    const historyBeforeQuestion = (
+      await this.ragConversationService.getRecentHistory(
+        conversationIdForResponse,
+      )
+    ).map((h) => ({
+      role: fromPrismaConversationRole(h.role),
+      content: h.content,
+      createdAt: h.createdAt,
+      id: h.id,
+      conversationId: h.conversationId,
+    }));
+
     const result = await this.geminiHttpService.generateContent(
       ragChatPrompt({
         question,
@@ -137,10 +161,21 @@ export class RagService {
           articleTitle: c.payload?.articleTitle as string,
           chunkText: c.payload?.chunkText as string,
         })),
+        history: historyBeforeQuestion,
       }),
     );
+
+    await this.ragConversationService.appendUserMessage(
+      conversationIdForResponse,
+      question,
+    );
+
     const answer = result.text;
-    const conversationIdForResponse = conversationId || randomUUID();
+    await this.ragConversationService.appendAssistantMessage(
+      conversationIdForResponse,
+      answer,
+    );
+    await this.ragConversationService.trimHistory(conversationIdForResponse);
     return {
       answer,
       sources: chunks.map((c) => ({
@@ -151,5 +186,17 @@ export class RagService {
       conversationId: conversationIdForResponse,
     };
   }
-  async chatHistory(conversationId: string) {}
+  async chatHistory(conversationId: string) {
+    const history =
+      await this.ragConversationService.getHistory(conversationId);
+    if (!history.length) throw new NotFoundError('Conversation not found');
+
+    return history.map((h) => ({
+      role: fromPrismaConversationRole(h.role),
+      content: h.content,
+      createdAt: h.createdAt,
+      id: h.id,
+      conversationId: h.conversationId,
+    }));
+  }
 }

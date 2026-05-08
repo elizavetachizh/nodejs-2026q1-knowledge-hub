@@ -22,3 +22,14 @@ export interface RagChatResponse {
   }>;
   conversationId: string;
 }
+export enum ConversationUserRole {
+  USER = 'user',
+  ASSISTANT = 'assistant',
+}
+export interface ConversationMessage {
+  role: ConversationUserRole;
+  content: string;
+  createdAt: Date;
+  id: string;
+  conversationId: string;
+}
