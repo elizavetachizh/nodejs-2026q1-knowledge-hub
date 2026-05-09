@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppHttpError } from 'src/common/errors/app-http.error';
 
 const { mockFetch, mockClose } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
@@ -179,11 +178,9 @@ describe('GeminiHttpService', () => {
 
     const service = new GeminiHttpService();
 
-    await expect(service.embedContent('abc')).rejects.toEqual(
-      expect.objectContaining<AppHttpError>({
-        statusCode: 502,
-        message: 'The embedding service returned an invalid response.',
-      }),
-    );
+    await expect(service.embedContent('abc')).rejects.toMatchObject({
+      statusCode: 502,
+      message: 'The embedding service returned an invalid response.',
+    });
   });
 });

@@ -143,7 +143,7 @@ Follow these steps or AI routes will fail (503 / 500) or never reach Google.
 - A **PostgreSQL** database with migrations applied and (optionally) seed data (`npx prisma migrate deploy`, `npx prisma db seed`), so `/ai/articles/:id/...` can load articles.
 - **`GEMINI_API_KEY` + `GEMINI_MODEL`** — see step 2.
 - **`GEMINI_API_BASE_URL`** — see step 3.
-- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see step 5(rate limit, cache TTL, usage notes).
+- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see step 4 (rate limit, cache TTL, usage notes).
 
 ---
 
@@ -218,34 +218,9 @@ These variables are listed in **`.env.example`**; set them in **`.env`** and res
 | `POST` | `/ai/generate` | **No auth.** **`prompt`** (required), optional **`context`**. |
 ---
 
-### 5. Run the app after `.env` is ready
+### 5. Additional information
 
-Local:
-
-```bash
-npm install
-npx prisma generate
-npx prisma migrate deploy
-npm run start:dev
-```
-
-Swagger: `http://localhost:4000/doc` → **Authorize** once for Bearer if you call **`POST /ai/articles/{articleId}/...`** or **`GET /ai/usage`** → **`POST /ai/generate`** works **without** token (see §5).
-
-Docker Compose reads **`.env`** via `env_file`:
-
-```bash
-docker compose up --build
-```
-
-Then check env inside app (optional):
-
-```bash
-docker compose exec app env | grep GEMINI
-```
-
----
-
-### 6. Smoke test (outside Swagger)
+Swagger: `http://localhost:4000/doc` → **Authorize** once for Bearer if you call **`POST /ai/articles/{articleId}/...`** or **`GET /ai/usage`** → **`POST /ai/generate`** works **without** token.
 
 Minimal `curl` shape (adjust host, model, key, Worker URL as needed):
 
@@ -270,29 +245,12 @@ Replace the placeholder with your published image link:
 
 This project includes a dedicated `RagModule` with Gemini-based embeddings/generation and Qdrant as an external vector database.
 
-### 1) How to get Gemini API key
-
-1. Open [Google AI Studio](https://aistudio.google.com) and sign in.
-2. Open **Get API key** / **API keys**.
-3. Create a key (or reuse an existing one for your Google Cloud project).
-4. Put the key in `.env`:
-
-```env
-GEMINI_API_KEY=your-gemini-api-key
-```
-
-### 2) Models used
+### 1) Models used
 
 - Generation model: `GEMINI_MODEL=gemini-2.0-flash`
 - Embedding model: `GEMINI_EMBEDDING_MODEL=text-embedding-004`
 
-Recommended base URL in this project:
-
-```env
-GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models
-```
-
-### 3) Vector DB and Docker Compose
+### 2) Vector DB and Docker Compose
 
 - Vector DB: **Qdrant** (`vectordb` service in `docker-compose.yml`)
 - Persistent storage: `qdrant_data` volume
@@ -310,35 +268,23 @@ RAG_CHUNK_OVERLAP=200
 RAG_CONVERSATION_MAX_MESSAGES=20
 ```
 
-### 4) Full startup flow after clone
+### 3) Full startup flow after clone
 
-1. Clone and install:
-
-```bash
-git clone <repository-url>
-cd nodejs-2026q1-knowledge-hub
-npm install
-```
-
-2. Configure `.env` (copy from `.env.example`) and set:
+1. Configure `.env` (copy from `.env.example`) and set:
    - Postgres variables (`POSTGRES_*`, `DATABASE_URL`)
    - Gemini variables (`GEMINI_API_KEY`, `GEMINI_API_BASE_URL`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`)
    - RAG variables (`RAG_VECTOR_*`, chunking, conversation limit)
 
-3. Start infrastructure:
+2. Build initial RAG index (required before search/chat):
 
 ```bash
-docker compose up --build
+curl -X POST http://localhost:4000/ai/rag/index \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{"onlyPublished":true}'
 ```
 
-4. Apply DB schema:
-
-```bash
-npx prisma generate
-npx prisma migrate deploy
-```
-
-### 5) Sample RAG requests
+### 4) Sample RAG requests
 
 Semantic search:
 
@@ -375,6 +321,13 @@ Conversation history:
 curl http://localhost:4000/ai/rag/chat/<conversationId>/history \
   -H "Authorization: Bearer <access_token>"
 ```
+
+### 5) Known RAG limitations
+
+- Gemini free-tier quotas can return `429` / temporary `503` under load.
+- RAG response latency depends on embedding, retrieval, reranking, and generation stages.
+- Initial indexing time grows with article count and content size.
+- Gemini/API regional availability may vary by account and deployment region.
 
 ## Security Scan
 
