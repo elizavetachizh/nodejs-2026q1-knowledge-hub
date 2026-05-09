@@ -33,3 +33,15 @@ export interface ConversationMessage {
   id: string;
   conversationId: string;
 }
+
+export type RerankInputChunk = {
+  id: string;
+  articleId: string;
+  articleTitle: string;
+  chunkText: string;
+  baseScore: number;
+};
+export type RerankOutputItem = {
+  id: string;
+  relevance: number; // 0..1
+};

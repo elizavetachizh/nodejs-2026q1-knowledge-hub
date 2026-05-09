@@ -55,7 +55,7 @@ export class RagController {
   async chatHistory(
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
   ) {
-    return await this.ragService.chatHistory(conversationId);
+    return this.ragService.chatHistory(conversationId);
   }
 
   @Delete('index/articles/:articleId')

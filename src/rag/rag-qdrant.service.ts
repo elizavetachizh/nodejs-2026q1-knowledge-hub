@@ -80,6 +80,48 @@ export class RagQdrantService {
       );
     }
   }
+  private async getIndexedArticleIds(): Promise<string[]> {
+    const articleIds = new Set<string>();
+    let offset: string | number | undefined;
+    try {
+      while (true) {
+        const page = await this.qdrantClient.scroll(this.collectionName, {
+          limit: 256,
+          with_payload: ['articleId'],
+          with_vector: false,
+          ...(offset !== undefined ? { offset } : {}),
+        });
+        for (const point of page.points ?? []) {
+          const articleId = point.payload?.articleId;
+          if (typeof articleId === 'string' && articleId.length > 0) {
+            articleIds.add(articleId);
+          }
+        }
+        const next = page.next_page_offset;
+        if (next === null || next === undefined) break;
+        offset = next as string | number;
+      }
+      return [...articleIds];
+    } catch (error) {
+      throw new AppHttpError(
+        503,
+        `Vector database error: Failed to read indexed article ids`,
+      );
+    }
+  }
+  async cleanupStaleArticleVectors(keepArticleIds: string[]): Promise<void> {
+    const keep = new Set(keepArticleIds);
+    const indexed = await this.getIndexedArticleIds();
+    const stale = indexed.filter((id) => !keep.has(id));
+    for (const articleId of stale) {
+      try {
+        await this.deleteByArticleId(articleId);
+      } catch (error) {
+        if (error instanceof NotFoundError) continue;
+        throw error;
+      }
+    }
+  }
   async searchByVector(params: SearchByVectorParams) {
     const {
       queryVector,

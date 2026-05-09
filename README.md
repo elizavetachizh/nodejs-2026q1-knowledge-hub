@@ -266,6 +266,116 @@ Replace the placeholder with your published image link:
 
 `https://hub.docker.com/repository/docker/elizavetachizh/nodejs-2026q1-knowledge-hub-app`
 
+## Knowledge Hub RAG
+
+This project includes a dedicated `RagModule` with Gemini-based embeddings/generation and Qdrant as an external vector database.
+
+### 1) How to get Gemini API key
+
+1. Open [Google AI Studio](https://aistudio.google.com) and sign in.
+2. Open **Get API key** / **API keys**.
+3. Create a key (or reuse an existing one for your Google Cloud project).
+4. Put the key in `.env`:
+
+```env
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+### 2) Models used
+
+- Generation model: `GEMINI_MODEL=gemini-2.0-flash`
+- Embedding model: `GEMINI_EMBEDDING_MODEL=text-embedding-004`
+
+Recommended base URL in this project:
+
+```env
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta/models
+```
+
+### 3) Vector DB and Docker Compose
+
+- Vector DB: **Qdrant** (`vectordb` service in `docker-compose.yml`)
+- Persistent storage: `qdrant_data` volume
+- App connectivity: `RAG_VECTOR_DB_URL=http://vectordb:6333`
+- Healthchecks and restart policies are configured for `app`, `db`, and `vectordb`
+
+Required RAG env block in `.env`:
+
+```env
+RAG_VECTOR_DB_PROVIDER=qdrant
+RAG_VECTOR_DB_URL=http://vectordb:6333
+RAG_VECTOR_COLLECTION=knowledge_hub_articles
+RAG_CHUNK_SIZE=800
+RAG_CHUNK_OVERLAP=200
+RAG_CONVERSATION_MAX_MESSAGES=20
+```
+
+### 4) Full startup flow after clone
+
+1. Clone and install:
+
+```bash
+git clone <repository-url>
+cd nodejs-2026q1-knowledge-hub
+npm install
+```
+
+2. Configure `.env` (copy from `.env.example`) and set:
+   - Postgres variables (`POSTGRES_*`, `DATABASE_URL`)
+   - Gemini variables (`GEMINI_API_KEY`, `GEMINI_API_BASE_URL`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`)
+   - RAG variables (`RAG_VECTOR_*`, chunking, conversation limit)
+
+3. Start infrastructure:
+
+```bash
+docker compose up --build
+```
+
+4. Apply DB schema:
+
+```bash
+npx prisma generate
+npx prisma migrate deploy
+```
+
+### 5) Sample RAG requests
+
+Semantic search:
+
+```bash
+curl -X POST http://localhost:4000/ai/rag/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "query":"How to configure Prisma with PostgreSQL?",
+    "limit":5,
+    "articleStatus":"published"
+  }'
+```
+
+Chat with RAG:
+
+```bash
+curl -X POST http://localhost:4000/ai/rag/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{"question":"How to run Qdrant in docker compose?"}'
+```
+
+Delete article vectors from index:
+
+```bash
+curl -X DELETE http://localhost:4000/ai/rag/index/articles/<articleId> \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Conversation history:
+
+```bash
+curl http://localhost:4000/ai/rag/chat/<conversationId>/history \
+  -H "Authorization: Bearer <access_token>"
+```
+
 ## Security Scan
 
 Image scanned with Docker Scout:

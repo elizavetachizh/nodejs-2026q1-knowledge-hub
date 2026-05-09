@@ -92,3 +92,11 @@ model RagConversationMessage {
   @@index([conversationId])
   @@index([createdAt])
 }
+
+model RagIndexState {
+  articleId       String   @id
+  contentHash     String
+  indexedAt       DateTime @default(now())
+  sourceUpdatedAt DateTime
+  @@index([indexedAt])
+}
