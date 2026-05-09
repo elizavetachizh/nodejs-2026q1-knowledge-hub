@@ -82,15 +82,26 @@ export class RagQdrantService {
   }
   private async getIndexedArticleIds(): Promise<string[]> {
     const articleIds = new Set<string>();
-    let offset: string | number | undefined;
+    let pageOffset: string | number | undefined;
     try {
       while (true) {
-        const page = await this.qdrantClient.scroll(this.collectionName, {
+        const scrollParams: {
+          limit: number;
+          with_payload: string[];
+          with_vector: boolean;
+          offset?: string | number;
+        } = {
           limit: 256,
           with_payload: ['articleId'],
           with_vector: false,
-          ...(offset !== undefined ? { offset } : {}),
-        });
+        };
+        if (pageOffset !== undefined) {
+          scrollParams.offset = pageOffset;
+        }
+        const page = await this.qdrantClient.scroll(
+          this.collectionName,
+          scrollParams,
+        );
         for (const point of page.points ?? []) {
           const articleId = point.payload?.articleId;
           if (typeof articleId === 'string' && articleId.length > 0) {
@@ -99,7 +110,7 @@ export class RagQdrantService {
         }
         const next = page.next_page_offset;
         if (next === null || next === undefined) break;
-        offset = next as string | number;
+        pageOffset = next as string | number;
       }
       return [...articleIds];
     } catch (error) {

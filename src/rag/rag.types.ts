@@ -1,9 +1,3 @@
-export interface RagIndexResponse {
-  indexedArticles: number;
-  indexedChunks: number;
-  vectorCollection: string;
-}
-
 export interface RagSearchResponse {
   results: Array<{
     articleId: string;
@@ -43,5 +37,5 @@ export type RerankInputChunk = {
 };
 export type RerankOutputItem = {
   id: string;
-  relevance: number; // 0..1
+  relevance: number;
 };

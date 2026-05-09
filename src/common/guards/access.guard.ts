@@ -32,12 +32,10 @@ export class AccessGuard implements CanActivate {
       if (method === 'GET') return true;
       if (path.startsWith('/category') && method !== 'GET') return false;
       if (path.startsWith('/user') && method !== 'GET') return false;
-      if (
+      return (
         (path.startsWith('/article') || path.startsWith('/comment')) &&
         ['POST', 'PUT', 'DELETE'].includes(method)
-      )
-        return true;
-      return false;
+      );
     }
     return false;
   };
@@ -47,8 +45,7 @@ export class AccessGuard implements CanActivate {
     if (path === '/auth/signup') return true;
     if (path === '/auth/login') return true;
     if (path === '/auth/refresh') return true;
-    if (path === '/ai/generate' && method === 'POST') return true;
-    return false;
+    return path === '/ai/generate' && method === 'POST';
   }
   private isBearerToken(authorizationHeader: unknown): string {
     if (typeof authorizationHeader !== 'string') {

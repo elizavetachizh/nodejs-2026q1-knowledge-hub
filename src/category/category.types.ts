@@ -1,5 +1,5 @@
 export interface Category {
-  id: string; // uuid v4
+  id: string;
   name: string;
   description: string;
 }

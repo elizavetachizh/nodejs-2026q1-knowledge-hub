@@ -11,13 +11,11 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  
   await prisma.comment.deleteMany();
   await prisma.article.deleteMany();
   await prisma.tag.deleteMany();
   await prisma.category.deleteMany();
   await prisma.user.deleteMany();
-
 
   const hashedPasswordAdmin = await bcrypt.hash('admin123', 10);
   const hashedPasswordEditor = await bcrypt.hash('editor123', 10);

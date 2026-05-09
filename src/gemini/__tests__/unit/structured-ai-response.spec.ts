@@ -69,22 +69,18 @@ describe('structured-ai-response', () => {
 
     it('treats non-JSON as plain translation with language hint fallback', () => {
       expect(
-        normalizeTranslateResponse(
-          `Просто текст без JSOn`,
-          'ru-RU',
-        ).translatedText,
+        normalizeTranslateResponse(`Просто текст без JSOn`, 'ru-RU')
+          .translatedText,
       ).toMatch(/просто текст/i);
-      expect(
-        normalizeTranslateResponse('Привет.', 'KK').detectedLanguage,
-      ).toBe('kk');
+      expect(normalizeTranslateResponse('Привет.', 'KK').detectedLanguage).toBe(
+        'kk',
+      );
     });
 
     it('fills detectedLanguage from hint when omitted in JSON', () => {
       expect(
-        normalizeTranslateResponse(
-          '{"translatedText":"hi"}',
-          'de',
-        ).detectedLanguage,
+        normalizeTranslateResponse('{"translatedText":"hi"}', 'de')
+          .detectedLanguage,
       ).toBe('de');
     });
 

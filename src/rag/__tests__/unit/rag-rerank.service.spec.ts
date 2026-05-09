@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RagRerankService } from 'src/rag/rag-rerank.service';
-import { AppHttpError } from 'src/common/errors/app-http.error';
 
 function makeGeminiMock() {
   return {
@@ -69,11 +68,9 @@ describe('RagRerankService', () => {
           baseScore: 0.6,
         },
       ]),
-    ).rejects.toEqual(
-      expect.objectContaining<AppHttpError>({
-        statusCode: 502,
-        message: 'Reranker returned non-JSON response',
-      }),
-    );
+    ).rejects.toMatchObject({
+      statusCode: 502,
+      message: 'Reranker returned non-JSON response',
+    });
   });
 });
