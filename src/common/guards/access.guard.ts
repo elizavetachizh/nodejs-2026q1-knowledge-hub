@@ -1,15 +1,18 @@
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import {
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+  ForbiddenError,
+  UnauthorizedError,
+} from 'src/common/errors/app-http.error';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole } from 'src/user/dto/create-user.dto';
 
 @Injectable()
 export class AccessGuard implements CanActivate {
+  private isArticleAiPost(method: string, path: string): boolean {
+    if (method !== 'POST') return false;
+    return /^\/ai\/articles\/[^/]+\/(summarize|translate|analyze)$/.test(path);
+  }
+
   private roleAllows = (
     role: string,
     method: string,
@@ -17,6 +20,8 @@ export class AccessGuard implements CanActivate {
   ): boolean => {
     if (path === '/auth/logout' && method === 'POST') return true;
     if (role === UserRole.ADMIN) return true;
+
+    if (this.isArticleAiPost(method, path)) return true;
 
     if (role === UserRole.VIEWER) return method === 'GET';
     if (role === UserRole.EDITOR) {
@@ -32,24 +37,25 @@ export class AccessGuard implements CanActivate {
     }
     return false;
   };
-  private isPublicRoute(path: string) {
+  private isPublicRoute(path: string, method: string) {
     if (path === '/') return true;
     if (path.startsWith('/doc')) return true;
     if (path === '/auth/signup') return true;
     if (path === '/auth/login') return true;
     if (path === '/auth/refresh') return true;
+    if (path === '/ai/generate' && method === 'POST') return true;
     return false;
   }
   private isBearerToken(authorizationHeader: unknown): string {
     if (typeof authorizationHeader !== 'string') {
-      throw new UnauthorizedException('Authorization header is missing');
+      throw new UnauthorizedError('Authorization header is missing');
     }
     if (!authorizationHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedError('Invalid token');
     }
     const token = authorizationHeader?.split(' ')[1];
     if (!token) {
-      throw new UnauthorizedException('Token is missing');
+      throw new UnauthorizedError('Token is missing');
     }
     return token;
   }
@@ -59,11 +65,11 @@ export class AccessGuard implements CanActivate {
         secret: process.env.JWT_SECRET,
       });
       if (!payload.userId || !payload.role || !payload.login) {
-        throw new UnauthorizedException('Invalid token');
+        throw new UnauthorizedError('Invalid token');
       }
       return payload;
     } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedError('Invalid token');
     }
   }
   constructor(private readonly jwtService: JwtService) {}
@@ -73,7 +79,7 @@ export class AccessGuard implements CanActivate {
     const path = request.path;
     const method = request.method;
 
-    if (this.isPublicRoute(path)) return true;
+    if (this.isPublicRoute(path, method)) return true;
 
     const authHeader = request.headers.authorization;
     const token = this.isBearerToken(authHeader);
@@ -88,7 +94,7 @@ export class AccessGuard implements CanActivate {
 
     const allowed = this.roleAllows(payload.role, method, path);
     if (!allowed) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenError('Access denied');
     }
     return true;
   }

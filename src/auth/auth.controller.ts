@@ -12,15 +12,7 @@ import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
 import { LogoutDto, RefreshDto } from './dto/refresh.dto';
 import { AppThrottlerGuard } from 'src/common/guards/throttler.guard';
-
-const getPositiveInt = (
-  value: string | undefined,
-  fallback: number,
-): number => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.trunc(parsed);
-};
+import { getPositiveInt } from 'src/common/utils/get-positive-int';
 
 const authLoginTtl = getPositiveInt(process.env.THROTTLE_AUTH_LOGIN_TTL, 60000);
 const authLoginLimit = getPositiveInt(

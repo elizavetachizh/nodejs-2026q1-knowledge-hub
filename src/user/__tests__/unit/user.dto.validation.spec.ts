@@ -1,7 +1,10 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateUserDto, UserRole } from 'src/user/dto/create-user.dto';
-import { UpdatePasswordDto, UpdateUserRoleDto } from 'src/user/dto/update-password.dto';
+import {
+  UpdatePasswordDto,
+  UpdateUserRoleDto,
+} from 'src/user/dto/update-password.dto';
 import { describe, it, expect } from 'vitest';
 
 describe('UserDtoValidation', () => {

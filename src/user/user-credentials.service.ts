@@ -1,7 +1,8 @@
 import { Prisma } from 'generated/prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { PublicUser } from './user.types';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { ValidationError } from 'src/common/errors/app-http.error';
 import * as bcrypt from 'bcrypt';
 import { toPrismaRole, toPublicUser } from './utils/user.mapper';
 import { UserRole } from './dto/create-user.dto';
@@ -29,16 +30,13 @@ export class UsersWriteService {
     role: UserRole;
   }): Promise<PublicUser> {
     if (!input.login || !input.password) {
-      throw new BadRequestException('Login and password are required');
+      throw new ValidationError('Login and password are required');
     }
     const existing = await this.prisma.user.findUnique({
       where: { login: input.login },
     });
     if (existing) {
-      throw new BadRequestException({
-        message: 'Login already taken',
-        id: existing.id,
-      });
+      throw new ValidationError('Login already taken', { id: existing.id });
     }
     const hashedPassword = await bcrypt.hash(
       input.password,
@@ -58,8 +56,7 @@ export class UsersWriteService {
         const duplicate = await this.prisma.user.findUnique({
           where: { login: input.login },
         });
-        throw new BadRequestException({
-          message: 'Login already taken',
+        throw new ValidationError('Login already taken', {
           id: duplicate?.id,
         });
       }

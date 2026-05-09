@@ -1,8 +1,8 @@
 import {
-  ForbiddenException,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  UnprocessableEntityError,
+} from 'src/common/errors/app-http.error';
 import { PrismaService } from 'prisma/prisma.service';
 import { JwtPayload } from 'src/auth/auth.types';
 import { UserRole } from 'src/user/dto/create-user.dto';
@@ -117,7 +117,7 @@ describe('getComment', () => {
     prisma.comment.findUnique.mockResolvedValue(null);
     await expect(
       commentService.getComment('550e8400-e29b-41d4-a716-446655440000'),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -162,7 +162,7 @@ describe('createComment', () => {
 
     await expect(
       commentService.createComment(dto, editorActor),
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    ).rejects.toBeInstanceOf(UnprocessableEntityError);
     expect(prisma.comment.create).not.toHaveBeenCalled();
   });
 
@@ -212,13 +212,13 @@ describe('createComment', () => {
     );
     await expect(
       commentService.createComment(dto, viewer),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.comment.create).not.toHaveBeenCalled();
   });
 });
 
 describe('deleteComment', () => {
-  it('throws ForbiddenException when user is viewer', async () => {
+  it('throws ForbiddenError when user is viewer', async () => {
     const row = prismaCommentRow({});
     prisma.comment.findUnique.mockResolvedValue(row);
 
@@ -230,7 +230,7 @@ describe('deleteComment', () => {
 
     await expect(
       commentService.deleteComment(row.id, viewer),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.comment.delete).not.toHaveBeenCalled();
   });
 
@@ -252,7 +252,7 @@ describe('deleteComment', () => {
         '550e8400-e29b-41d4-a716-446655440000',
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(prisma.comment.delete).not.toHaveBeenCalled();
   });
 });
@@ -285,7 +285,7 @@ describe('updateComment', () => {
     });
   });
 
-  it('throws NotFoundException when comment missing', async () => {
+  it('throws NotFoundError when comment missing', async () => {
     prisma.comment.findUnique.mockResolvedValue(null);
 
     await expect(
@@ -296,7 +296,7 @@ describe('updateComment', () => {
         },
         editorActor,
       ),
-    ).rejects.toBeInstanceOf(NotFoundException);
+    ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(prisma.comment.update).not.toHaveBeenCalled();
   });
@@ -310,7 +310,7 @@ describe('updateComment', () => {
 
     await expect(
       commentService.updateComment(existing.id, { content: 'x' }, editorActor),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(prisma.comment.update).not.toHaveBeenCalled();
   });
 
@@ -323,6 +323,6 @@ describe('updateComment', () => {
 
     await expect(
       commentService.updateComment(existing.id, { content: 'x' }, editorActor),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

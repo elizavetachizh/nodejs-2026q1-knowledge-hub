@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+  ForbiddenError,
+  NotFoundError,
+  UnprocessableEntityError,
+} from 'src/common/errors/app-http.error';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Comment } from './comment.types';
 import { PrismaService } from 'prisma/prisma.service';
@@ -26,7 +26,7 @@ export class CommentService {
       (this.prisma as any)?.findArticleById?.(createCommentDto.articleId),
     );
     if (!hasArticle) {
-      throw new UnprocessableEntityException(
+      throw new UnprocessableEntityError(
         `Article with id ${createCommentDto.articleId} does not exist`,
       );
     }
@@ -43,17 +43,17 @@ export class CommentService {
     if (actor.role === UserRole.ADMIN) return;
     if (actor.role === UserRole.EDITOR) {
       if (!authorId) {
-        throw new ForbiddenException(
+        throw new ForbiddenError(
           'Editor can not modify comment without author',
         );
       }
       if (authorId !== actor.userId) {
-        throw new ForbiddenException('Editor can modify only own comments');
+        throw new ForbiddenError('Editor can modify only own comments');
       }
       return;
     }
 
-    throw new ForbiddenException('Insufficient permissions');
+    throw new ForbiddenError('Insufficient permissions');
   }
 
   async getComments(articleId: string): Promise<Comment[]> {
@@ -71,7 +71,7 @@ export class CommentService {
       where: { id },
     });
     if (!comment) {
-      throw new NotFoundException(`Comment with id ${id} not found`);
+      throw new NotFoundError(`Comment with id ${id} not found`);
     }
     return toCommentDto(comment);
   }
@@ -96,7 +96,7 @@ export class CommentService {
       })
       .then((article) => {
         if (!article) {
-          throw new UnprocessableEntityException(
+          throw new UnprocessableEntityError(
             `Article with id ${createCommentDto.articleId} does not exist`,
           );
         }
@@ -106,7 +106,7 @@ export class CommentService {
         } else if (actor.role === UserRole.EDITOR) {
           finalAuthorId = actor.userId;
         } else {
-          throw new ForbiddenException('Insufficient permissions');
+          throw new ForbiddenError('Insufficient permissions');
         }
         this.assertEditorOwnsComment(actor, finalAuthorId);
 
@@ -124,12 +124,16 @@ export class CommentService {
       .then((comment) => toCommentDto(comment));
   }
 
-  async updateComment(id: string, updateCommentDto: UpdateCommentDto, actor: JwtPayload): Promise<Comment> {
+  async updateComment(
+    id: string,
+    updateCommentDto: UpdateCommentDto,
+    actor: JwtPayload,
+  ): Promise<Comment> {
     const comment = await this.prisma.comment.findUnique({
       where: { id },
     });
     if (!comment) {
-      throw new NotFoundException(`Comment with id ${id} not found`);
+      throw new NotFoundError(`Comment with id ${id} not found`);
     }
     this.assertEditorOwnsComment(actor, comment.authorId);
     const row = await this.prisma.comment.update({
@@ -141,13 +145,12 @@ export class CommentService {
     return toCommentDto(row);
   }
 
-
   async deleteComment(id: string, actor: JwtPayload): Promise<void> {
     const comment = await this.prisma.comment.findUnique({
       where: { id },
     });
     if (!comment) {
-      throw new NotFoundException(`Comment with id ${id} not found`);
+      throw new NotFoundError(`Comment with id ${id} not found`);
     }
     this.assertEditorOwnsComment(actor, comment.authorId);
     await this.prisma.comment.delete({
