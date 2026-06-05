@@ -1,22 +1,13 @@
 import { ArticleStatus } from './dto/create-article.dto';
 
 export type Article = {
-  id: string; // uuid v4
+  id: string;
   title: string;
   content: string;
   status: ArticleStatus;
-  authorId: string | null; // refers to User
-  categoryId: string | null; // refers to Category
-  tags: string[]; // array of tag names
-  createdAt: number; // timestamp of creation
-  updatedAt: number; // timestamp of last update
-};
-
-export type ArticleCreateInput = Omit<Article, 'id' | 'createdAt' | 'updatedAt'> & {
-  tags: {
-    connectOrCreate: {
-      where: { name: string };
-      create: { name: string };
-    }[];
-  };
+  authorId: string | null;
+  categoryId: string | null;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
 };

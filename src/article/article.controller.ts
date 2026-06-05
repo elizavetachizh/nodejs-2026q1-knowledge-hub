@@ -20,6 +20,15 @@ import { sortData } from 'src/common/utils/sort';
 import { Article } from './article.types';
 import { JwtPayload } from 'src/auth/auth.types';
 type AuthRequest = { user: JwtPayload };
+
+const ARTICLE_SORT_FIELDS = [
+  'title',
+  'status',
+  'categoryId',
+  'createdAt',
+  'updatedAt',
+] as const;
+type ArticleSortField = (typeof ARTICLE_SORT_FIELDS)[number];
 @ApiTags('Article')
 @ApiBearerAuth('bearer')
 @Controller('article')
@@ -48,13 +57,13 @@ export class ArticleController {
   @ApiQuery({
     name: 'sortBy',
     required: false,
-    type: String,
-    description: 'Sort by field',
+    enum: ARTICLE_SORT_FIELDS,
+    description: 'Sort by one of supported article fields',
   })
   @ApiQuery({
     name: 'order',
     required: false,
-    type: String,
+    enum: ['asc', 'desc'],
     description: 'Sort order',
   })
   @ApiQuery({
@@ -73,7 +82,7 @@ export class ArticleController {
     @Query('status') status?: ArticleStatus,
     @Query('categoryId') categoryId?: string,
     @Query('tag') tag?: string,
-    @Query('sortBy') sortBy?: string,
+    @Query('sortBy') sortBy?: ArticleSortField,
     @Query('order') order?: 'asc' | 'desc',
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -89,11 +98,7 @@ export class ArticleController {
       (rawQuery.sortBy as string).length > 0;
     const sortedArticles = hasSorting
       ? sortData<Article>(articles, sortBy, order, [
-          'title',
-          'status',
-          'categoryId',
-          'createdAt',
-          'updatedAt',
+          ...ARTICLE_SORT_FIELDS,
         ])
       : articles;
     const hasPagination =
@@ -142,7 +147,7 @@ export class ArticleController {
   }
 
   @Delete(':id')
-  @HttpCode(204) // Or use @HttpCode(HttpStatus.NO_CONTENT)
+  @HttpCode(204)
   async deleteArticle(
     @Param('id', ParseUUIDPipe) id: string,
     @Req() request: AuthRequest,

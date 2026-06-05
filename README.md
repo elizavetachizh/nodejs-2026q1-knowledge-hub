@@ -143,7 +143,7 @@ Follow these steps or AI routes will fail (503 / 500) or never reach Google.
 - A **PostgreSQL** database with migrations applied and (optionally) seed data (`npx prisma migrate deploy`, `npx prisma db seed`), so `/ai/articles/:id/...` can load articles.
 - **`GEMINI_API_KEY` + `GEMINI_MODEL`** — see step 2.
 - **`GEMINI_API_BASE_URL`** — see step 3.
-- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see step 5(rate limit, cache TTL, usage notes).
+- **`AI_RATE_LIMIT_RPM`**, **`AI_RATE_WINDOW_MS`**, **`AI_CACHE_TTL_SEC`** — see step 4 (rate limit, cache TTL, usage notes).
 
 ---
 
@@ -218,34 +218,9 @@ These variables are listed in **`.env.example`**; set them in **`.env`** and res
 | `POST` | `/ai/generate` | **No auth.** **`prompt`** (required), optional **`context`**. |
 ---
 
-### 5. Run the app after `.env` is ready
+### 5. Additional information
 
-Local:
-
-```bash
-npm install
-npx prisma generate
-npx prisma migrate deploy
-npm run start:dev
-```
-
-Swagger: `http://localhost:4000/doc` → **Authorize** once for Bearer if you call **`POST /ai/articles/{articleId}/...`** or **`GET /ai/usage`** → **`POST /ai/generate`** works **without** token (see §5).
-
-Docker Compose reads **`.env`** via `env_file`:
-
-```bash
-docker compose up --build
-```
-
-Then check env inside app (optional):
-
-```bash
-docker compose exec app env | grep GEMINI
-```
-
----
-
-### 6. Smoke test (outside Swagger)
+Swagger: `http://localhost:4000/doc` → **Authorize** once for Bearer if you call **`POST /ai/articles/{articleId}/...`** or **`GET /ai/usage`** → **`POST /ai/generate`** works **without** token.
 
 Minimal `curl` shape (adjust host, model, key, Worker URL as needed):
 
@@ -265,6 +240,94 @@ Expect JSON with **`candidates`**. **`429`** = quota/exhaustion on Google side; 
 Replace the placeholder with your published image link:
 
 `https://hub.docker.com/repository/docker/elizavetachizh/nodejs-2026q1-knowledge-hub-app`
+
+## Knowledge Hub RAG
+
+This project includes a dedicated `RagModule` with Gemini-based embeddings/generation and Qdrant as an external vector database.
+
+### 1) Models used
+
+- Generation model: `GEMINI_MODEL=gemini-2.0-flash`
+- Embedding model: `GEMINI_EMBEDDING_MODEL=text-embedding-004`
+
+### 2) Vector DB and Docker Compose
+
+- Vector DB: **Qdrant** (`vectordb` service in `docker-compose.yml`)
+- Persistent storage: `qdrant_data` volume
+- App connectivity: `RAG_VECTOR_DB_URL=http://vectordb:6333`
+- Healthchecks and restart policies are configured for `app`, `db`, and `vectordb`
+
+Required RAG env block in `.env`:
+
+```env
+RAG_VECTOR_DB_PROVIDER=qdrant
+RAG_VECTOR_DB_URL=http://vectordb:6333
+RAG_VECTOR_COLLECTION=knowledge_hub_articles
+RAG_CHUNK_SIZE=800
+RAG_CHUNK_OVERLAP=200
+RAG_CONVERSATION_MAX_MESSAGES=20
+```
+
+### 3) Full startup flow after clone
+
+1. Configure `.env` (copy from `.env.example`) and set:
+   - Postgres variables (`POSTGRES_*`, `DATABASE_URL`)
+   - Gemini variables (`GEMINI_API_KEY`, `GEMINI_API_BASE_URL`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL`)
+   - RAG variables (`RAG_VECTOR_*`, chunking, conversation limit)
+
+2. Build initial RAG index (required before search/chat):
+
+```bash
+curl -X POST http://localhost:4000/ai/rag/index \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{"onlyPublished":true}'
+```
+
+### 4) Sample RAG requests
+
+Semantic search:
+
+```bash
+curl -X POST http://localhost:4000/ai/rag/search \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{
+    "query":"How to configure Prisma with PostgreSQL?",
+    "limit":5,
+    "articleStatus":"published"
+  }'
+```
+
+Chat with RAG:
+
+```bash
+curl -X POST http://localhost:4000/ai/rag/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <access_token>" \
+  -d '{"question":"How to run Qdrant in docker compose?"}'
+```
+
+Delete article vectors from index:
+
+```bash
+curl -X DELETE http://localhost:4000/ai/rag/index/articles/<articleId> \
+  -H "Authorization: Bearer <access_token>"
+```
+
+Conversation history:
+
+```bash
+curl http://localhost:4000/ai/rag/chat/<conversationId>/history \
+  -H "Authorization: Bearer <access_token>"
+```
+
+### 5) Known RAG limitations
+
+- Gemini free-tier quotas can return `429` / temporary `503` under load.
+- RAG response latency depends on embedding, retrieval, reranking, and generation stages.
+- Initial indexing time grows with article count and content size.
+- Gemini/API regional availability may vary by account and deployment region.
 
 ## Security Scan
 

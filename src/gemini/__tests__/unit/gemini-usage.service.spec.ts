@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  GeminiUsageService,
-} from '../../gemini-usage.service';
+import { GeminiUsageService } from '../../gemini-usage.service';
 
 describe('GeminiUsageService observability snapshot', () => {
   let s: GeminiUsageService;

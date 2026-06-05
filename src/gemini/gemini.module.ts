@@ -7,7 +7,7 @@ import { GeminiUsageService } from './gemini-usage.service';
 
 @Module({
   providers: [GeminiService, GeminiHttpService, GeminiUsageService],
-  exports: [GeminiService],
+  exports: [GeminiService, GeminiHttpService],
   controllers: [GeminiController],
   imports: [forwardRef(() => ArticleModule)],
 })

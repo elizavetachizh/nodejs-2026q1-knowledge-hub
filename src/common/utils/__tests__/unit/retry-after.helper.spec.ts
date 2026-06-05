@@ -16,8 +16,7 @@ describe('ensureRetryAfterHeader', () => {
 
   function mockRes(headerMap: Record<string, string>): Response {
     return {
-      get: (name: string) =>
-        headerMap[String(name).toLowerCase()] ?? undefined,
+      get: (name: string) => headerMap[String(name).toLowerCase()] ?? undefined,
       setHeader: vi.fn(),
       headersSent: false,
     } as unknown as Response;
